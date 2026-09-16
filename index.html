@@ -130,6 +130,7 @@
   .btn.danger{background:var(--white);color:#8f3226;border:1px solid #dcbcb5;font-size:13px;padding:11px;font-weight:700;}
   .btn + .btn{margin-top:8px;}
   .btn-row{display:flex;gap:8px;}
+  .btn-row + .btn{margin-top:12px;}
   .btn-row .btn{margin-top:0;}
 
   .chart-card{position:relative;border:1px solid var(--gray-300);border-radius:7px;padding:10px 4px 6px;margin-bottom:12px;}
@@ -948,7 +949,7 @@
       }
       shown = i;
       clearTimeout(timer);
-      timer = setTimeout(hide, 3000);
+      timer = setTimeout(hide, 2000);
     }
 
     svg.addEventListener("click", function (e) {
