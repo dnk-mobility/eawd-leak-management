@@ -279,6 +279,7 @@
         <button class="btn sub" id="csvBtn" type="button">CSV 내보내기</button>
         <button class="btn sub" id="backupBtn" type="button">전체 백업 파일</button>
       </div>
+      <button class="btn sub" id="chartImgBtn" type="button" style="margin-top:8px;">이번 달 그래프 이미지 저장 (PNG)</button>
       <button class="btn sub" id="restoreBtn" type="button" style="margin-top:8px;">백업 파일 불러오기</button>
       <input type="file" id="restoreFile" accept=".json,application/json" style="display:none;">
       <button class="btn danger" id="wipeBtn" type="button" style="margin-top:14px;">이 설비 기록 전체 삭제</button>
@@ -663,10 +664,12 @@
   /* =========================================================================
      ② 꺾은선 그래프 (외부 라이브러리 없이 SVG 직접 생성)
      ========================================================================= */
-  var W = 320, H = 168, PL = 40, PR = 12, PT = 14, PB = 30;
+  var W = 320, H = 190, PL = 40, PR = 12, PT = 34, PB = 30;
 
-  function buildChart(s, points) {
+  function buildChart(s, points, titleLine1, titleLine2) {
     // points: [{label, v, judge, date, shift}]
+    // titleLine1/2: 이미지로 저장했을 때도 어느 설비·샘플·월 그래프인지 알 수 있도록
+    // SVG 안에 직접 그려 넣는 제목 (화면의 .ch-head/.ch-spec와 같은 내용을 중복 기재)
     var xs = [], ys = [];
     var vals = points.map(function (p) { return p.v; });
     var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
@@ -688,6 +691,9 @@
 
     var svg = [];
     svg.push('<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(s.name) + ' 누설값 추이">');
+    svg.push('<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="#fff"/>');
+    if (titleLine1) svg.push('<text x="' + PL + '" y="9" font-size="8.5" font-weight="700" fill="#0a2540">' + esc(titleLine1) + '</text>');
+    if (titleLine2) svg.push('<text x="' + PL + '" y="19" font-size="7.5" fill="#454e57">' + esc(titleLine2) + '</text>');
 
     // 스펙 범위(합격 구간) 음영
     if (s.lsl !== null || s.usl !== null) {
@@ -783,6 +789,9 @@
       drawn++;
 
       var ngN = points.filter(function (p) { return p.judge === "NG"; }).length;
+      var yearNum = parseInt(ym.slice(0, 4), 10), monthNum = parseInt(ym.slice(5, 7), 10);
+      var chartTitle1 = EQ[eqId].title + " (공정No." + eqId + ") · " + yearNum + "년 " + monthNum + "월";
+      var chartTitle2 = s.name + "(" + s.type + ") · " + specText(s) + " · " + (ngN ? "NG " + ngN + "건" : "전건 OK");
       var card = document.createElement("div");
       card.className = "chart-card";
       card.innerHTML =
@@ -793,7 +802,7 @@
             (ngN ? "NG " + ngN + "건" : "전건 OK") + '</span>' +
         '</div>' +
         '<div class="ch-spec">' + esc(specText(s)) + ' · ' + points.length + '회 기록</div>' +
-        buildChart(s, points) +
+        buildChart(s, points, chartTitle1, chartTitle2) +
         '<div class="ch-legend">' +
           '<span><i style="background:#0f6cb0;"></i>누설값</span>' +
           '<span><i style="background:#c0392b;"></i>상·하한</span>' +
@@ -1028,6 +1037,69 @@
   function exportBackup() {
     download("마스터샘플_백업_" + todayStr() + ".json", JSON.stringify(db, null, 1), "application/json");
     toast("백업 파일을 내보냈습니다");
+  }
+
+  function downloadBlob(filename, blob) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+  }
+
+  // 그래프(svg)를 캔버스에 그려 PNG로 변환한다. 그래프 안에 이미 제목을 그려 넣었으므로
+  // (buildChart 의 titleLine1/2) 이미지만 봐도 어느 설비·샘플·월인지 알 수 있다.
+  function svgToPngBlob(svgEl) {
+    var SCALE = 3; // 인쇄·확대해도 흐려지지 않도록 3배 해상도로 그린다
+    return new Promise(function (resolve, reject) {
+      var vb = svgEl.getAttribute("viewBox").split(" ").map(Number);
+      var w = vb[2], h = vb[3];
+      var xml = new XMLSerializer().serializeToString(svgEl);
+      var svgUrl = URL.createObjectURL(new Blob([xml], { type: "image/svg+xml;charset=utf-8" }));
+      var img = new Image();
+      img.onload = function () {
+        var canvas = document.createElement("canvas");
+        canvas.width = w * SCALE;
+        canvas.height = h * SCALE;
+        var ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(svgUrl);
+        canvas.toBlob(function (blob) {
+          if (blob) resolve(blob); else reject(new Error("toBlob 실패"));
+        }, "image/png");
+      };
+      img.onerror = function () { URL.revokeObjectURL(svgUrl); reject(new Error("svg 로드 실패")); };
+      img.src = svgUrl;
+    });
+  }
+
+  function exportChartImages() {
+    var cards = document.querySelectorAll("#chartBody .chart-card");
+    if (!cards.length) { toast("내보낼 그래프가 없습니다"); return; }
+    var list = Array.prototype.slice.call(cards);
+    var ok = 0;
+
+    function next() {
+      if (!list.length) {
+        toast(ok ? ok + "개 그래프 이미지를 저장했습니다" : "그래프 이미지 저장에 실패했습니다 (브라우저 호환 문제일 수 있음 — CSV로 내보내 주세요)");
+        return;
+      }
+      var card = list.shift();
+      var svg = card.querySelector("svg");
+      var name = (card.querySelector(".ch-name") || {}).textContent || "샘플";
+      svgToPngBlob(svg).then(function (blob) {
+        downloadBlob("누설값그래프_공정No" + eqId + "_" + name.replace(/[\\/:*?"<>|\s]/g, "") + "_" + ym + ".png", blob);
+        ok++;
+        // 브라우저가 다운로드를 한꺼번에 여러 개 막는 경우가 있어 사이에 텀을 둔다
+        setTimeout(next, 400);
+      }, function () {
+        setTimeout(next, 0);
+      });
+    }
+    next();
   }
 
   function importBackup(file) {
@@ -1285,6 +1357,7 @@
     $("addSampleBtn").addEventListener("click", addSample);
     $("csvBtn").addEventListener("click", exportCsv);
     $("backupBtn").addEventListener("click", exportBackup);
+    $("chartImgBtn").addEventListener("click", exportChartImages);
     $("wipeBtn").addEventListener("click", wipeEq);
     $("restoreBtn").addEventListener("click", function () { $("restoreFile").click(); });
     $("restoreFile").addEventListener("change", function (e) {
