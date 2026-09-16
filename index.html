@@ -101,7 +101,7 @@
   .srow .sspec{font-size:10.5px;color:var(--gray-500);font-variant-numeric:tabular-nums;margin-top:1px;}
   .srow .sin{display:flex;align-items:center;gap:8px;}
   .srow .sin input{
-    flex:1;box-sizing:border-box;font-family:inherit;font-size:17px;font-weight:700;
+    flex:0 1 50%;box-sizing:border-box;font-family:inherit;font-size:17px;font-weight:700;
     padding:10px;border:1px solid var(--gray-300);border-radius:6px;
     text-align:right;font-variant-numeric:tabular-nums;background:var(--white);
   }
@@ -305,34 +305,53 @@
      설비 정보 — 각 설비 상세 페이지(leak-*.html)의 요약표와 같은 값입니다.
      defaults: 처음 열었을 때 자동으로 만들어지는 마스터 샘플 목록
                (스펙은 비워 두고, 사용자가 ④에서 입력하도록 함)
+
+     2026-09-18: 전체계(공정No.130·190)는 하우징·인버터 두 채널을 하나의 탭에서
+     같이 관리했으나, 채널을 분리해 관리·그래프 보기가 편하도록 6개 채널로 나눴다.
+     eq 키는 물리적 공정No.는 그대로 쓰되 "-h"(하우징)/"-i"(인버터) 접미사로 구분한다
+     (실제 QR 정보관리 시스템의 leak-pre-full.html/leak-post-full.html 페이지 자체는
+     하우징·인버터를 한 페이지에서 그대로 다룬다 — 이 트렌드 앱에서만의 구분).
+     tab: 홈 화면 채널 탭에 쓰는 짧은 이름 (공정No. 접두사 없이).
      ========================================================================= */
   var EQ = {
     "120": {
-      title: "조립전 유로계 리크검사기", proc: "유로계 리크 테스트(조립전) · 120",
+      tab: "조립전 유로계", title: "조립전 유로계 리크검사기", proc: "유로계 리크 테스트(조립전) · 120",
       eq: "리크 테스터", det: "코스모 LS-R700", pres: "2 bar ± 0.1",
       crit: "5 mL/min 이하", doc: "DnK-250915-002", page: "leak-pre-flow.html",
       defaults: ["OK 마스터", "NG 마스터"]
     },
-    "130": {
-      title: "조립전 전체계 리크검사기", proc: "전체계 리크 테스트(조립전) · 130",
-      eq: "리크 테스터", det: "코스모 LS-R700", pres: "1 bar ± 0.1 (하우징·인버터)",
+    "130-h": {
+      tab: "조립전 전체계(하우징)", title: "조립전 전체계 리크검사기 — 하우징", proc: "전체계 리크 테스트(조립전)·하우징 · 130",
+      eq: "리크 테스터", det: "코스모 LS-R700", pres: "1 bar ± 0.1",
       crit: "5 mL/min 이하", doc: "DnK-250915-003", page: "leak-pre-full.html",
-      defaults: ["OK 마스터(하우징)", "NG 마스터(하우징)", "OK 마스터(인버터)", "NG 마스터(인버터)"]
+      defaults: ["OK 마스터", "NG 마스터"]
+    },
+    "130-i": {
+      tab: "조립전 전체계(인버터)", title: "조립전 전체계 리크검사기 — 인버터", proc: "전체계 리크 테스트(조립전)·인버터 · 130",
+      eq: "리크 테스터", det: "코스모 LS-R700", pres: "1 bar ± 0.1",
+      crit: "5 mL/min 이하", doc: "DnK-250915-003", page: "leak-pre-full.html",
+      defaults: ["OK 마스터", "NG 마스터"]
     },
     "180": {
-      title: "조립후 유로계 리크검사기", proc: "유로계 리크 테스트(조립후) · 180",
+      tab: "조립후 유로계", title: "조립후 유로계 리크검사기", proc: "유로계 리크 테스트(조립후) · 180",
       eq: "리크 테스터", det: "코스모 LS-R700", pres: "2 bar ± 0.1",
       crit: "5 mL/min 이하", doc: "DnK-250915-008", page: "leak-post-flow.html",
       defaults: ["OK 마스터", "NG 마스터"]
     },
-    "190": {
-      title: "조립후 전체계 리크검사기", proc: "전체계 리크 테스트(조립후) · 190",
-      eq: "리크 테스터", det: "코스모 LS-R902", pres: "1 bar ± 0.1 (하우징·인버터)",
+    "190-h": {
+      tab: "조립후 전체계(하우징)", title: "조립후 전체계 리크검사기 — 하우징", proc: "전체계 리크 테스트(조립후)·하우징 · 190",
+      eq: "리크 테스터", det: "코스모 LS-R902", pres: "1 bar ± 0.1",
       crit: "5 mL/min 이하", doc: "DnK-250915-009", page: "leak-post-full.html",
-      defaults: ["OK 마스터(하우징)", "NG 마스터(하우징)", "OK 마스터(인버터)", "NG 마스터(인버터)"]
+      defaults: ["OK 마스터", "NG 마스터"]
+    },
+    "190-i": {
+      tab: "조립후 전체계(인버터)", title: "조립후 전체계 리크검사기 — 인버터", proc: "전체계 리크 테스트(조립후)·인버터 · 190",
+      eq: "리크 테스터", det: "코스모 LS-R902", pres: "1 bar ± 0.1",
+      crit: "5 mL/min 이하", doc: "DnK-250915-009", page: "leak-post-full.html",
+      defaults: ["OK 마스터", "NG 마스터"]
     }
   };
-  var EQ_IDS = ["120", "130", "180", "190"];
+  var EQ_IDS = ["120", "130-h", "130-i", "180", "190-h", "190-i"];
   var UNIT = "mL/min";
 
   var STORE_KEY = "dnk_leak_master_v1";
@@ -491,7 +510,7 @@
       var b = document.createElement("button");
       b.type = "button";
       b.className = "eq-tab" + (id === eqId ? " on" : "");
-      b.textContent = "공정No." + id + " " + EQ[id].title.replace("리크검사기", "").trim();
+      b.textContent = EQ[id].tab;
       b.addEventListener("click", function () {
         if (id === eqId) return;
         eqId = id;
@@ -535,11 +554,14 @@
      ========================================================================= */
   function renderInput() {
     var box = $("inputSamples");
-    var samples = cur().samples;
+    var all = cur().samples;
+    var samples = all.filter(function (s) { return !s.retired; });
     box.innerHTML = "";
 
     if (!samples.length) {
-      box.innerHTML = '<div class="empty">등록된 마스터 샘플이 없습니다.<br>④ 마스터 샘플 · 스펙 관리에서 먼저 추가하세요.</div>';
+      box.innerHTML = all.length
+        ? '<div class="empty">사용 중인 마스터 샘플이 없습니다(전부 폐기됨).<br>④ 마스터 샘플 · 스펙 관리에서 새 샘플을 추가하세요.</div>'
+        : '<div class="empty">등록된 마스터 샘플이 없습니다.<br>④ 마스터 샘플 · 스펙 관리에서 먼저 추가하세요.</div>';
       return;
     }
 
@@ -790,18 +812,20 @@
 
       var ngN = points.filter(function (p) { return p.judge === "NG"; }).length;
       var yearNum = parseInt(ym.slice(0, 4), 10), monthNum = parseInt(ym.slice(5, 7), 10);
-      var chartTitle1 = EQ[eqId].title + " (공정No." + eqId + ") · " + yearNum + "년 " + monthNum + "월";
-      var chartTitle2 = s.name + "(" + s.type + ") · " + specText(s) + " · " + (ngN ? "NG " + ngN + "건" : "전건 OK");
+      var chartTitle1 = EQ[eqId].title + " · " + yearNum + "년 " + monthNum + "월";
+      var chartTitle2 = s.name + "(" + s.type + ")" + (s.retired ? " · 폐기됨(" + s.retiredAt + ")" : "") +
+        " · " + specText(s) + " · " + (ngN ? "NG " + ngN + "건" : "전건 OK");
       var card = document.createElement("div");
       card.className = "chart-card";
       card.innerHTML =
         '<div class="ch-head">' +
           '<span class="badge type' + (s.type === "NG" ? " ngm" : "") + '">' + esc(s.type) + '</span>' +
-          '<span class="ch-name">' + esc(s.name) + '</span>' +
+          '<span class="ch-name">' + esc(s.name) + (s.retired ? ' <span class="badge" style="background:var(--gray-300);color:var(--gray-700);">폐기됨</span>' : '') + '</span>' +
           '<span class="badge ' + (ngN ? "ng" : "ok") + '" style="margin-left:auto;">' +
             (ngN ? "NG " + ngN + "건" : "전건 OK") + '</span>' +
         '</div>' +
-        '<div class="ch-spec">' + esc(specText(s)) + ' · ' + points.length + '회 기록</div>' +
+        '<div class="ch-spec">' + esc(specText(s)) + ' · ' + points.length + '회 기록' +
+          (s.retired ? ' · 폐기일 ' + esc(s.retiredAt) : '') + '</div>' +
         buildChart(s, points, chartTitle1, chartTitle2) +
         '<div class="ch-legend">' +
           '<span><i style="background:#0f6cb0;"></i>누설값</span>' +
@@ -916,6 +940,9 @@
       var row = document.createElement("div");
       row.className = "srow";
       row.innerHTML =
+        (s.retired ?
+          '<p class="hint" style="color:var(--warn-text);margin:0 0 8px;">이 샘플은 ' + esc(s.retiredAt) +
+          ' 부터 사용 중지(폐기)되었습니다. 지난 기록·그래프는 그대로 남아 있고, ①입력 화면에는 더 이상 나타나지 않습니다.</p>' : '') +
         '<div class="fld"><label>샘플명</label>' +
           '<input type="text" data-f="name" value="' + esc(s.name) + '" autocomplete="off"></div>' +
         '<div class="fld"><label>구분</label>' +
@@ -933,9 +960,12 @@
         '</div>' +
         '<div class="btn-row">' +
           '<button class="btn sub" data-a="apply">이 샘플 저장</button>' +
+          (s.retired
+            ? '<button class="btn sub" data-a="restore">사용 재개</button>'
+            : '<button class="btn sub" data-a="retire">폐기(교체)</button>') +
           '<button class="btn danger" data-a="del">삭제</button>' +
         '</div>' +
-        (used ? '<p class="hint">이 샘플에는 이미 기록이 있습니다. 삭제하면 지난 기록의 값도 함께 사라집니다.</p>' : "");
+        (used ? '<p class="hint">이 샘플에는 이미 기록이 있습니다. "삭제"하면 지난 기록의 값도 함께 사라집니다 — 샘플을 다른 것으로 바꾸는 경우라면 "삭제" 대신 "폐기(교체)"를 쓰세요. 지난 이력이 그대로 남습니다.</p>' : "");
 
       row.querySelector('[data-a="apply"]').addEventListener("click", function () {
         var name = row.querySelector('[data-f="name"]').value.trim();
@@ -953,6 +983,39 @@
         afterWrite(pushCurrentSamples());
         toast("스펙이 저장되었습니다");
       });
+
+      var retireBtn = row.querySelector('[data-a="retire"]');
+      if (retireBtn) {
+        retireBtn.addEventListener("click", function () {
+          var d = prompt(
+            '"' + s.name + '" 샘플을 언제부터 사용 중지할까요?\n' +
+            "지난 기록·그래프는 그대로 남고, 그 이후로는 ①입력 화면에 나타나지 않습니다.\n" +
+            "(YYYY-MM-DD, 비우면 오늘)",
+            todayStr()
+          );
+          if (d === null) return;
+          d = d.trim() || todayStr();
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { toast("날짜 형식이 올바르지 않습니다 (예: 2026-09-16)"); return; }
+          s.retired = true;
+          s.retiredAt = d;
+          save();
+          renderAll();
+          afterWrite(pushCurrentSamples());
+          toast('"' + s.name + '" 샘플을 ' + d + '부터 사용 중지했습니다. 새 샘플은 아래 "+ 마스터 샘플 추가"로 등록하세요.');
+        });
+      }
+
+      var restoreBtn = row.querySelector('[data-a="restore"]');
+      if (restoreBtn) {
+        restoreBtn.addEventListener("click", function () {
+          s.retired = false;
+          s.retiredAt = null;
+          save();
+          renderAll();
+          afterWrite(pushCurrentSamples());
+          toast('"' + s.name + '" 샘플을 다시 사용합니다.');
+        });
+      }
 
       row.querySelector('[data-a="del"]').addEventListener("click", function () {
         if (!confirm('"' + s.name + '" 샘플을 삭제할까요?' +
@@ -1186,7 +1249,8 @@
     if (data.samples && data.samples.length) {
       e.samples = data.samples.map(function (s) {
         return { id: s.id, name: s.name, type: s.type === "NG" ? "NG" : "OK",
-                 nominal: s.nominal, lsl: s.lsl, usl: s.usl };
+                 nominal: s.nominal, lsl: s.lsl, usl: s.usl,
+                 retired: !!s.retired, retiredAt: s.retiredAt || null };
       });
     }
 

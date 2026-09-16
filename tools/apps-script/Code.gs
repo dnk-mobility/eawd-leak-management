@@ -32,7 +32,7 @@ var REC_HEAD = ['공정No.', '일자', '교대', '기록ID', '샘플ID', '샘플
                 '누설값', '고유지정값', '하한값', '상한값', '판정',
                 '설비주변온도', '확인자', '비고', '수정시각'];
 var SAM_HEAD = ['공정No.', '샘플ID', '샘플명', '구분', '고유지정값', '하한값', '상한값',
-                '수정시각', '삭제'];
+                '수정시각', '삭제', '폐기여부', '폐기일자'];
 
 /* =========================================================================
    진입점
@@ -138,7 +138,8 @@ function pull(eq, ym) {
     if (asText(r[8]) === 'Y') continue;           // 삭제 표시된 행은 건너뜀
     out.samples.push({
       id: asText(r[1]), name: asText(r[2]), type: asText(r[3]) === 'NG' ? 'NG' : 'OK',
-      nominal: asNum(r[4]), lsl: asNum(r[5]), usl: asNum(r[6])
+      nominal: asNum(r[4]), lsl: asNum(r[5]), usl: asNum(r[6]),
+      retired: asText(r[9]) === 'Y', retiredAt: asText(r[10]) || null
     });
   }
 
@@ -217,7 +218,9 @@ function push(payload) {
 
 /* =========================================================================
    쓰기 — 설비 1개소의 마스터 샘플 정의 전체 교체
-   payload = { eq, samples:[{id,name,type,nominal,lsl,usl}] }
+   payload = { eq, samples:[{id,name,type,nominal,lsl,usl,retired,retiredAt}] }
+   (retired/retiredAt: 2026-09-18 추가 — 샘플을 삭제하지 않고 "폐기"만 표시해
+    지난 기록·그래프는 유지한 채 새 샘플로 넘어갈 수 있게 함)
    ========================================================================= */
 
 function saveSamples(payload) {
@@ -233,7 +236,8 @@ function saveSamples(payload) {
 
     var ts = nowStr();
     var rows = samples.map(function (s) {
-      return [eq, s.id, s.name, s.type, s.nominal, s.lsl, s.usl, ts, ''];
+      return [eq, s.id, s.name, s.type, s.nominal, s.lsl, s.usl, ts, '',
+              s.retired ? 'Y' : '', s.retiredAt || ''];
     });
     if (rows.length) {
       sh.getRange(sh.getLastRow() + 1, 1, rows.length, SAM_HEAD.length).setValues(rows);
