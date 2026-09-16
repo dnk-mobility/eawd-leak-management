@@ -18,12 +18,13 @@
 | 항목 | 내용 |
 |---|---|
 | 로컬 개발 환경 | `C:\Users\user\Desktop\후공정 리크 설비 마스터 샘플 기록관리 프로젝트` |
-| 저장소 | [`dongnam959/eawd-leak-management`](https://github.com/dongnam959/eawd-leak-management) |
+| 저장소 | [`dnk-mobility/eawd-leak-management`](https://github.com/dnk-mobility/eawd-leak-management) |
 | 브랜치 | `main` (단일 브랜치) |
-| 배포 방식 | GitHub Pages (project site — QR 정보관리 시스템과 달리 `<계정>.github.io` 루트가 아니라 `<계정>.github.io/<저장소명>/` 하위 경로) |
-| 실서비스 주소 | https://dongnam959.github.io/eawd-leak-management/ |
+| 배포 방식 | GitHub Pages (project site — QR 정보관리 시스템과 달리 `<조직명>.github.io` 루트가 아니라 `<조직명>.github.io/<저장소명>/` 하위 경로) |
+| 실서비스 주소 | https://dnk-mobility.github.io/eawd-leak-management/ |
 | 빌드 도구 | 없음 — 순수 정적 HTML/CSS/JS |
-| 저장소 생성 | 2026-09-16, GitHub CLI(`gh repo create`)로 생성 + Pages API로 활성화 |
+| 저장소 생성 | 2026-09-16, GitHub CLI(`gh repo create`)로 `dongnam959` 개인 계정에 생성 |
+| 조직 이전 | 2026-09-16, `dnk-mobility` 조직(Organization)으로 이전. 개인 계정(`dongnam959`) 하나에 계정이 묶이면 담당자 퇴사 시 인수인계가 어려워지는 문제를 없애기 위함 — 상세 사유는 §9 참고 |
 
 ---
 
@@ -31,6 +32,7 @@
 
 | 파일 | 역할 |
 |---|---|
+| `tools/make_qr.py` | QR 재생성 스크립트 (조직 이전 등으로 주소가 바뀔 때 `BASE` 값만 고치고 재실행) |
 | `index.html` | 전체 화면 1장. 설비 전환 탭 4개(`?eq=120\|130\|180\|190`) + 입력·그래프·월별기록·스펙관리·백업 |
 | `gate.js` | 접속 암호 — **기기당 1회만** 확인(localStorage). QR 정보관리 시스템의 2단계 세션 방식과 다름(§4) |
 | `leak-sync.js` | 구글 스프레드시트 연동 — 폰 저장 우선, 그 다음 전송(§5) |
@@ -40,7 +42,6 @@
 | `tools/apps-script/Code.gs` | 구글 시트 쪽 서버 코드 원본 (Apps Script 편집기에 배포된 것과 동일본 — 백업/참고용) |
 | `구글시트_연동_설정방법.md` | 최초 1회 연동 설정 절차 (계정 소유자가 직접 수행) |
 | `qr-codes/eq-120.png` 등 4개 | 설비별 QR (§6) |
-| `tools/make_qr.py` | QR 재생성 스크립트 |
 
 ---
 
@@ -66,16 +67,16 @@
 
 ## 6. QR 코드
 
-`tools/make_qr.py` 로 생성. 저장소 주소가 확정된 뒤(2026-09-16) 아래 최종 주소로 재생성 완료:
+`tools/make_qr.py` 로 생성. **2026-09-16 조직 이전으로 주소가 한 번 바뀌어 재생성했다** (다행히 라벨 출력 전이라 실물 재출력 비용은 없었음):
 
 | 파일 | 대상 | 주소 |
 |---|---|---|
-| `qr-codes/eq-120.png` | 공정No.120 (조립전 유로계) | `https://dongnam959.github.io/eawd-leak-management/?eq=120` |
-| `qr-codes/eq-130.png` | 공정No.130 (조립전 전체계) | `https://dongnam959.github.io/eawd-leak-management/?eq=130` |
-| `qr-codes/eq-180.png` | 공정No.180 (조립후 유로계) | `https://dongnam959.github.io/eawd-leak-management/?eq=180` |
-| `qr-codes/eq-190.png` | 공정No.190 (조립후 전체계) | `https://dongnam959.github.io/eawd-leak-management/?eq=190` |
+| `qr-codes/eq-120.png` | 공정No.120 (조립전 유로계) | `https://dnk-mobility.github.io/eawd-leak-management/?eq=120` |
+| `qr-codes/eq-130.png` | 공정No.130 (조립전 전체계) | `https://dnk-mobility.github.io/eawd-leak-management/?eq=130` |
+| `qr-codes/eq-180.png` | 공정No.180 (조립후 유로계) | `https://dnk-mobility.github.io/eawd-leak-management/?eq=180` |
+| `qr-codes/eq-190.png` | 공정No.190 (조립후 전체계) | `https://dnk-mobility.github.io/eawd-leak-management/?eq=190` |
 
-저장소 이름을 바꾸면 주소가 바뀌므로 `tools/make_qr.py` 의 `BASE` 값을 맞추고 다시 실행해야 한다 (그러면 현장에 붙인 QR 라벨도 재발급 필요).
+저장소 이름이나 조직명이 또 바뀌면 주소도 바뀌므로 `tools/make_qr.py` 의 `BASE` 값을 맞추고 다시 실행해야 한다 (그러면 현장에 붙인 QR 라벨도 재발급 필요 — **그래서 QR을 실제로 출력·부착하기 전에 계정/조직 구조부터 확정해 두는 것이 중요하다**, §9 참고).
 
 ---
 
@@ -102,6 +103,14 @@
 - 설정 전: 화면 상단 띠에 "이 폰에만 저장됨" 표시. 정상 동작하지만 폰마다 데이터가 따로 논다.
 - 설정 후: "구글시트 연동됨" 표시로 바뀌고, 어느 폰에서 입력해도 같은 데이터를 본다. 원본은 구글 스프레드시트에 쌓여 관리자가 시트를 직접 열어봐도 된다(위 ⑤ 다운로드 버튼과는 별개의, 상시 열람 가능한 원본 저장소).
 
-## 9. 향후 기록 위치
+## 9. 계정·조직 소유권 (담당자 교체에 대비)
+
+**GitHub·구글시트 계정을 특정 개인 명의로 두지 않는다.** 담당자가 퇴사하면 계정이 통째로 사라지거나 접근이 끊기는 문제를 막기 위한 조치.
+
+- **GitHub**: 2026-09-16, 개인 계정(`dongnam959`) 소유였던 이 저장소와 QR 정보관리 시스템 저장소를 **`dnk-mobility` 조직(Organization)**으로 이전했다. 조직은 공동 관리자를 여러 명 등록할 수 있어, 한 사람이 나가도 다른 관리자가 그대로 운영할 수 있다. (이전 전: `dongnam959/eawd-leak-management` → 이전 후: `dnk-mobility/eawd-leak-management`, 무료 요금제 그대로)
+- **구글시트 연동 계정**: 회사에 부서 공용 메일함이 없어(직원별 개인 메일만 존재), **부서명 의미의 신규 계정**(예: "DnK 후공정 생산기술팀")을 새로 만들어 쓴다. 이 계정은 특정 개인 소유가 아니라 팀 자산으로 취급하고, **복구 이메일을 현재 담당자의 회사 개인 메일로 걸어 둔다.** 담당자가 바뀌면 복구 이메일만 후임자 메일로 갱신하고 비밀번호를 인계하면 되며, 계정을 새로 만들 필요가 없다.
+- QR 라벨을 실제로 출력·부착하기 전에 이 구조를 먼저 정리해 둔 이유: 계정/저장소 소유권을 나중에 바꾸면 주소가 바뀌어 이미 붙인 라벨을 전부 재출력해야 한다. 지금(2026-09-16 기준 양쪽 다 라벨 미부착) 이 문제를 해결하는 것이 가장 비용이 적게 든다.
+
+## 10. 향후 기록 위치
 
 앞으로 이 프로젝트에 변경사항이 생기면, QR 정보관리 시스템의 `개선이력.md`처럼 이 파일 하단에 이어서 누적 기록한다 (문제 → 조치 → 검증 → 효과 형식 권장).

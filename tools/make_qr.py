@@ -3,7 +3,7 @@
 import os
 import qrcode
 
-BASE = "https://dongnam959.github.io/eawd-leak-management/"
+BASE = "https://dnk-mobility.github.io/eawd-leak-management/"
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "qr-codes")
 
 for eq in ("120", "130", "180", "190"):
