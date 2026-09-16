@@ -26,7 +26,7 @@
   /* ▼▼▼ 설정 — 구글시트 연동 후 이 두 줄만 채워서 push 하면 됩니다 ▼▼▼ */
 
   // Apps Script "웹 앱" 배포 주소 (https://script.google.com/macros/s/..../exec)
-  var URL = "";
+  var URL = "https://script.google.com/macros/s/AKfycbxh8E4XdHGyH4BEti6jsZJ0Z3auFlPlGLEfIcLmIux8Kt1OAEGAliTHuKw5aE0busi1/exec";
 
   // tools/apps-script/Code.gs 의 TOKEN 과 반드시 같은 값
   var TOKEN = "dnk-leak-2026";
