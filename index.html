@@ -1,0 +1,1315 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<title>e-AWD 모터 하우징 누설값 관리 시스템</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  /*
+    이 페이지 전용 스타일 (입력 폼 · 꺾은선 그래프 · 월 네비게이션).
+    공통 뼈대(.id-bar / .doc-header / .section / footer 등)는 styles.css 를 그대로 씁니다
+    (QR코드 설비 정보시스템에서 가져온 공용 스타일 — 이 프로젝트는 그 시스템과 완전히 별개다).
+  */
+  .eq-tabs{
+    display:flex;gap:6px;overflow-x:auto;padding:10px 14px 0;
+    max-width:640px;margin:0 auto;-webkit-overflow-scrolling:touch;
+  }
+  .eq-tab{
+    flex:0 0 auto;border:1px solid var(--line);background:var(--white);
+    border-radius:999px;padding:7px 13px;font-size:12px;font-weight:700;
+    color:var(--gray-700);cursor:pointer;white-space:nowrap;
+    font-family:inherit;
+  }
+  .eq-tab.on{background:var(--navy);border-color:var(--navy);color:#fff;}
+  .eq-tab:active{opacity:.85;}
+
+  .month-bar{
+    max-width:640px;margin:10px auto 0;padding:0 14px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .month-bar .mv{
+    flex:1;background:var(--navy);color:#fff;border-radius:8px;
+    padding:9px 12px;display:flex;align-items:center;justify-content:space-between;
+  }
+  .month-bar .mv .label{font-size:15px;font-weight:800;letter-spacing:.01em;}
+  .month-bar .mv .meta{font-size:10.5px;color:#8fb3d6;font-weight:600;}
+
+  .sync-bar{
+    max-width:640px;margin:8px auto 0;padding:0 14px;
+    display:flex;align-items:center;gap:7px;
+  }
+  .sync-bar .inner{
+    flex:1;display:flex;align-items:center;gap:7px;min-width:0;
+    border:1px solid var(--line);background:var(--white);
+    border-radius:7px;padding:7px 10px;font-size:11.5px;color:var(--gray-700);
+  }
+  .sync-bar .dot{
+    width:7px;height:7px;border-radius:50%;background:var(--gray-400);flex-shrink:0;
+  }
+  .sync-bar.on .dot{background:#1c9d5c;}
+  .sync-bar.busy .dot{background:var(--accent);}
+  .sync-bar.warn .dot{background:#c8981f;}
+  .sync-bar.err .dot{background:#c0392b;}
+  .sync-bar .txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .sync-bar button{
+    flex-shrink:0;border:1px solid var(--line);background:var(--white);border-radius:6px;
+    font-family:inherit;font-size:11px;font-weight:700;color:var(--navy);
+    padding:7px 10px;cursor:pointer;
+  }
+  .sync-bar button:active{background:var(--gray-200);}
+  .sync-bar button:disabled{color:var(--gray-400);}
+  .navbtn{
+    width:38px;height:38px;flex-shrink:0;border:1px solid var(--line);
+    background:var(--white);border-radius:8px;color:var(--navy);
+    font-size:16px;font-weight:800;cursor:pointer;font-family:inherit;
+  }
+  .navbtn:disabled{color:var(--gray-300);}
+  .navbtn:active{background:var(--gray-200);}
+
+  .fld{margin-bottom:10px;}
+  .fld > label{
+    display:block;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+    color:var(--gray-500);margin-bottom:4px;text-transform:uppercase;
+  }
+  .fld input, .fld select, .fld textarea{
+    width:100%;box-sizing:border-box;font-family:inherit;font-size:16px;
+    padding:9px 10px;border:1px solid var(--gray-300);border-radius:6px;
+    background:var(--white);color:var(--gray-900);
+    font-variant-numeric:tabular-nums;
+  }
+  .fld input:focus, .fld select:focus{outline:2px solid var(--accent);outline-offset:-1px;}
+  .fld-row{display:flex;gap:8px;}
+  .fld-row > .fld{flex:1;margin-bottom:10px;}
+
+  .seg{display:flex;border:1px solid var(--gray-300);border-radius:6px;overflow:hidden;}
+  .seg button{
+    flex:1;border:none;background:var(--white);padding:10px 0;
+    font-family:inherit;font-size:13px;font-weight:700;color:var(--gray-500);cursor:pointer;
+  }
+  .seg button + button{border-left:1px solid var(--gray-300);}
+  .seg button.on{background:var(--navy);color:#fff;}
+
+  .srow{
+    border:1px solid var(--gray-300);border-radius:7px;padding:10px 11px;margin-bottom:8px;
+    background:var(--gray-100);
+  }
+  .srow .shead{display:flex;align-items:center;gap:7px;margin-bottom:7px;}
+  .srow .sname{font-size:13px;font-weight:700;color:var(--gray-900);}
+  .srow .sspec{font-size:10.5px;color:var(--gray-500);font-variant-numeric:tabular-nums;margin-top:1px;}
+  .srow .sin{display:flex;align-items:center;gap:8px;}
+  .srow .sin input{
+    flex:1;box-sizing:border-box;font-family:inherit;font-size:17px;font-weight:700;
+    padding:10px;border:1px solid var(--gray-300);border-radius:6px;
+    text-align:right;font-variant-numeric:tabular-nums;background:var(--white);
+  }
+  .srow .unit{font-size:11px;color:var(--gray-500);flex-shrink:0;}
+
+  .badge{
+    font-size:10px;font-weight:800;padding:2px 7px;border-radius:4px;flex-shrink:0;
+    letter-spacing:.02em;
+  }
+  .badge.ok{background:var(--ok-bg);color:var(--ok-text);}
+  .badge.ng{background:#fbeae8;color:#a5372c;}
+  .badge.na{background:var(--gray-200);color:var(--gray-500);}
+  .badge.type{background:var(--navy);color:#fff;}
+  .badge.type.ngm{background:#8a5a12;}
+
+  .btn{
+    width:100%;padding:13px;border:none;border-radius:7px;background:var(--accent);
+    color:#fff;font-family:inherit;font-size:15px;font-weight:800;cursor:pointer;
+  }
+  .btn:active{opacity:.85;}
+  .btn.sub{background:var(--white);color:var(--navy);border:1px solid var(--gray-300);font-size:13px;padding:11px;font-weight:700;}
+  .btn.danger{background:var(--white);color:#a5372c;border:1px solid #e3c4c0;font-size:13px;padding:11px;font-weight:700;}
+  .btn + .btn{margin-top:8px;}
+  .btn-row{display:flex;gap:8px;}
+  .btn-row .btn{margin-top:0;}
+
+  .chart-card{border:1px solid var(--gray-300);border-radius:7px;padding:10px 4px 6px;margin-bottom:12px;}
+  .chart-card .ch-head{display:flex;align-items:center;gap:7px;padding:0 8px 6px;}
+  .chart-card .ch-name{font-size:12.5px;font-weight:700;color:var(--gray-900);}
+  .chart-card .ch-spec{font-size:10px;color:var(--gray-500);padding:0 8px 4px;font-variant-numeric:tabular-nums;}
+  .chart-card svg{display:block;width:100%;height:auto;}
+  .ch-legend{display:flex;flex-wrap:wrap;gap:10px;padding:4px 8px 0;font-size:10px;color:var(--gray-500);}
+  .ch-legend i{display:inline-block;width:13px;height:2px;vertical-align:middle;margin-right:3px;}
+
+  .empty{
+    text-align:center;color:var(--gray-500);font-size:12.5px;
+    padding:22px 10px;background:var(--gray-100);border-radius:7px;
+    border:1px dashed var(--gray-300);
+  }
+  .hint{font-size:11.5px;color:var(--gray-500);line-height:1.5;margin:6px 0 0;}
+
+  table.hist td.act{min-width:52px;}
+  table.hist button.mini{
+    border:1px solid var(--gray-300);background:var(--white);border-radius:4px;
+    font-family:inherit;font-size:10.5px;padding:3px 7px;cursor:pointer;color:var(--gray-700);
+  }
+  table.hist td.v{font-weight:700;font-variant-numeric:tabular-nums;}
+  table.hist td.v.ng{color:#a5372c;}
+
+  .toast{
+    position:fixed;left:50%;bottom:26px;transform:translateX(-50%);
+    background:var(--navy);color:#fff;font-size:13px;font-weight:700;
+    padding:11px 18px;border-radius:999px;z-index:9000;
+    box-shadow:0 6px 18px rgba(10,37,64,.28);
+    opacity:0;transition:opacity .2s ease;pointer-events:none;max-width:88%;text-align:center;
+  }
+  .toast.show{opacity:1;}
+
+  @media (prefers-reduced-motion:reduce){ .toast{transition:none;} }
+</style>
+</head>
+<body>
+<script src="gate.js"></script>
+<script src="leak-sync.js"></script>
+
+<div class="id-bar">
+  <span>DnK MOBILITY · 후공정 생산기술팀</span>
+  <span class="product">e-AWD 70kW MOTOR HOUSING ASS'Y</span>
+</div>
+
+<div class="doc-header">
+  <p class="doc-type">e-AWD 모터 하우징 누설값 관리 시스템 <span style="opacity:.7;font-weight:600;">· LEAK VALUE MANAGEMENT SYSTEM</span></p>
+  <h1 id="eqTitle">리크검사기</h1>
+
+  <div class="title-block">
+    <div class="title-grid">
+      <div class="cell wide"><span class="k">공정명 / 공정No.</span><span class="v" id="mProc">—</span></div>
+      <div class="cell"><span class="k">설비명</span><span class="v" id="mEq">—</span></div>
+      <div class="cell right"><span class="k">디텍터 사양</span><span class="v" id="mDet">—</span></div>
+      <div class="cell"><span class="k">테스트 압력</span><span class="v" id="mPres">—</span></div>
+      <div class="cell right"><span class="k">제품 판정 기준</span><span class="v" id="mCrit">—</span></div>
+      <div class="cell bottom"><span class="k">점검 주기</span><span class="v">시업 전 1회/shift</span></div>
+      <div class="cell right bottom"><span class="k">관련 문서</span><span class="v" id="mDoc">—</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="eq-tabs" id="eqTabs"></div>
+
+<div class="month-bar">
+  <button class="navbtn" id="prevM" type="button" aria-label="이전 달">‹</button>
+  <div class="mv">
+    <span class="label" id="mLabel">—</span>
+    <span class="meta" id="mMeta">—</span>
+  </div>
+  <button class="navbtn" id="nextM" type="button" aria-label="다음 달">›</button>
+</div>
+
+<div class="sync-bar" id="syncBar">
+  <span class="inner"><span class="dot"></span><span class="txt" id="syncText">확인 중…</span></span>
+  <button type="button" id="syncBtn">새로고침</button>
+</div>
+
+<main>
+
+  <details class="section" id="secInput" open>
+    <summary><span class="num">①</span>시업 전 점검 입력<span class="chev">▾</span></summary>
+    <div class="body">
+      <div class="fld-row">
+        <div class="fld">
+          <label for="inDate">점검 일자</label>
+          <input type="date" id="inDate">
+        </div>
+        <div class="fld">
+          <label for="inTemp">설비주변온도 (℃)</label>
+          <input type="number" id="inTemp" step="0.1" inputmode="decimal" placeholder="예: 22.4">
+        </div>
+      </div>
+
+      <div class="fld">
+        <label>교대</label>
+        <div class="seg" id="shiftSeg">
+          <button type="button" data-shift="주간" class="on">주간</button>
+          <button type="button" data-shift="야간">야간</button>
+        </div>
+      </div>
+
+      <div class="fld">
+        <label for="inUser">확인자</label>
+        <input type="text" id="inUser" placeholder="이름 입력" autocomplete="off">
+      </div>
+
+      <h4 class="sub">마스터 샘플 누설값</h4>
+      <div id="inputSamples"></div>
+
+      <div class="fld">
+        <label for="inNote">비고</label>
+        <input type="text" id="inNote" placeholder="특이사항 (선택)" autocomplete="off">
+      </div>
+
+      <button class="btn" id="saveBtn" type="button">저장</button>
+      <p class="hint" id="saveHint">같은 일자·교대로 다시 저장하면 기존 기록을 덮어씁니다.</p>
+    </div>
+  </details>
+
+  <details class="section" id="secChart" open>
+    <summary><span class="num">②</span>누설값 트렌드 그래프<span class="chev">▾</span></summary>
+    <div class="body" id="chartBody"></div>
+  </details>
+
+  <details class="section" id="secList">
+    <summary><span class="num">③</span>월별 기록<span class="chev">▾</span></summary>
+    <div class="body" id="listBody"></div>
+  </details>
+
+  <details class="section" id="secSpec">
+    <summary><span class="num">④</span>마스터 샘플 · 스펙 관리<span class="chev">▾</span></summary>
+    <div class="body">
+      <p class="hint" style="margin:0 0 10px;">마스터 샘플의 <b>고유 지정값</b>과 <b>스펙(하한·상한)</b>을 여기서 한 번 등록해 두면, 매일 입력할 때는 누설값만 적으면 됩니다. 값을 고쳐도 이미 저장된 기록의 판정은 그때 기준 그대로 남습니다.</p>
+      <div id="specBody"></div>
+      <button class="btn sub" id="addSampleBtn" type="button">+ 마스터 샘플 추가</button>
+    </div>
+  </details>
+
+  <details class="section" id="secData">
+    <summary><span class="num">⑤</span>데이터 · 연동 설정<span class="chev">▾</span></summary>
+    <div class="body">
+      <h4 class="sub">구글시트 연동</h4>
+      <p class="hint" id="syncDesc" style="margin:0 0 10px;"></p>
+      <div id="syncSetup"></div>
+
+      <h4 class="sub">백업 · 내보내기</h4>
+      <p class="hint" style="margin:0 0 10px;">연동을 쓰지 않으면 기록은 <b>이 폰(브라우저)에만</b> 저장됩니다. 어느 쪽이든 월말에 CSV로 내보내 PC에 보관해 두는 것을 권장합니다.</p>
+      <div class="btn-row">
+        <button class="btn sub" id="csvBtn" type="button">CSV 내보내기</button>
+        <button class="btn sub" id="backupBtn" type="button">전체 백업 파일</button>
+      </div>
+      <button class="btn sub" id="restoreBtn" type="button" style="margin-top:8px;">백업 파일 불러오기</button>
+      <input type="file" id="restoreFile" accept=".json,application/json" style="display:none;">
+      <button class="btn danger" id="wipeBtn" type="button" style="margin-top:14px;">이 설비 기록 전체 삭제</button>
+      <p class="hint" id="dataStat"></p>
+    </div>
+  </details>
+
+</main>
+
+<footer>
+  <div class="brand">DnK MOBILITY · 후공정 생산기술팀</div>
+  본 페이지는 사내 품질관리 목적으로 관리됩니다<br>
+  내용 오류·업데이트 문의는 후공정 생산기술팀으로 부탁드립니다
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* =========================================================================
+     설비 정보 — 각 설비 상세 페이지(leak-*.html)의 요약표와 같은 값입니다.
+     defaults: 처음 열었을 때 자동으로 만들어지는 마스터 샘플 목록
+               (스펙은 비워 두고, 사용자가 ④에서 입력하도록 함)
+     ========================================================================= */
+  var EQ = {
+    "120": {
+      title: "조립전 유로계 리크검사기", proc: "유로계 리크 테스트(조립전) · 120",
+      eq: "리크 테스터", det: "코스모 LS-R700", pres: "2 bar ± 0.1",
+      crit: "5 mL/min 이하", doc: "DnK-250915-002", page: "leak-pre-flow.html",
+      defaults: ["OK 마스터", "NG 마스터"]
+    },
+    "130": {
+      title: "조립전 전체계 리크검사기", proc: "전체계 리크 테스트(조립전) · 130",
+      eq: "리크 테스터", det: "코스모 LS-R700", pres: "1 bar ± 0.1 (하우징·인버터)",
+      crit: "5 mL/min 이하", doc: "DnK-250915-003", page: "leak-pre-full.html",
+      defaults: ["OK 마스터(하우징)", "NG 마스터(하우징)", "OK 마스터(인버터)", "NG 마스터(인버터)"]
+    },
+    "180": {
+      title: "조립후 유로계 리크검사기", proc: "유로계 리크 테스트(조립후) · 180",
+      eq: "리크 테스터", det: "코스모 LS-R700", pres: "2 bar ± 0.1",
+      crit: "5 mL/min 이하", doc: "DnK-250915-008", page: "leak-post-flow.html",
+      defaults: ["OK 마스터", "NG 마스터"]
+    },
+    "190": {
+      title: "조립후 전체계 리크검사기", proc: "전체계 리크 테스트(조립후) · 190",
+      eq: "리크 테스터", det: "코스모 LS-R902", pres: "1 bar ± 0.1 (하우징·인버터)",
+      crit: "5 mL/min 이하", doc: "DnK-250915-009", page: "leak-post-full.html",
+      defaults: ["OK 마스터(하우징)", "NG 마스터(하우징)", "OK 마스터(인버터)", "NG 마스터(인버터)"]
+    }
+  };
+  var EQ_IDS = ["120", "130", "180", "190"];
+  var UNIT = "mL/min";
+
+  var STORE_KEY = "dnk_leak_master_v1";
+  var USER_KEY = "dnk_leak_last_user";
+
+  /* ===== 상태 ===== */
+  var eqId = "120";
+  var ym = "";        // "2026-09"
+  var shift = "주간";
+  var db = null;      // { v:1, eq:{ "120": { samples:[], recs:[] } } }
+
+  /* =========================================================================
+     저장소 (localStorage)
+     ========================================================================= */
+  function blankEq(id) {
+    var s = [];
+    EQ[id].defaults.forEach(function (name) {
+      s.push({
+        id: uid(), name: name,
+        type: /NG/i.test(name) ? "NG" : "OK",
+        nominal: null, lsl: null, usl: null
+      });
+    });
+    return { samples: s, recs: [] };
+  }
+
+  function load() {
+    var raw = null;
+    try { raw = localStorage.getItem(STORE_KEY); } catch (e) {}
+    if (raw) {
+      try { db = JSON.parse(raw); } catch (e) { db = null; }
+    }
+    if (!db || typeof db !== "object" || !db.eq) db = { v: 1, eq: {} };
+    EQ_IDS.forEach(function (id) {
+      if (!db.eq[id]) db.eq[id] = blankEq(id);
+      if (!Array.isArray(db.eq[id].samples)) db.eq[id].samples = [];
+      if (!Array.isArray(db.eq[id].recs)) db.eq[id].recs = [];
+    });
+  }
+
+  function save() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(db));
+      return true;
+    } catch (e) {
+      // 사파리 프라이빗 모드 등에서 저장이 막히는 경우
+      toast("저장 실패 — 브라우저 저장공간을 쓸 수 없습니다");
+      return false;
+    }
+  }
+
+  function cur() { return db.eq[eqId]; }
+
+  function uid() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  /* =========================================================================
+     유틸
+     ========================================================================= */
+  function $(id) { return document.getElementById(id); }
+
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+
+  function todayStr() {
+    var d = new Date();
+    return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+  }
+
+  function num(v) {
+    if (v === null || v === undefined || v === "") return null;
+    var n = parseFloat(v);
+    return isFinite(n) ? n : null;
+  }
+
+  function fmt(n) {
+    if (n === null || n === undefined) return "";
+    return String(Math.round(n * 1000) / 1000);
+  }
+
+  function esc(s) {
+    return String(s === null || s === undefined ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function judge(v, lsl, usl) {
+    if (v === null) return "-";
+    if (lsl === null && usl === null) return "-";
+    if (lsl !== null && v < lsl) return "NG";
+    if (usl !== null && v > usl) return "NG";
+    return "OK";
+  }
+
+  function specText(s) {
+    if (s.nominal === null && s.lsl === null && s.usl === null) {
+      return "지정값·스펙 미입력 — ④에서 등록하세요";
+    }
+    var parts = [];
+    parts.push("지정값 " + (s.nominal === null ? "미입력" : fmt(s.nominal)));
+    if (s.lsl === null && s.usl === null) parts.push("스펙 미입력 (판정 안 됨)");
+    else parts.push("스펙 " + (s.lsl === null ? "—" : fmt(s.lsl)) + " ~ " + (s.usl === null ? "—" : fmt(s.usl)));
+    return parts.join(" · ") + " " + UNIT;
+  }
+
+  var toastTimer = null;
+  function toast(msg) {
+    var t = $("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove("show"); }, 2200);
+  }
+
+  function sampleById(sid) {
+    var list = cur().samples;
+    for (var i = 0; i < list.length; i++) if (list[i].id === sid) return list[i];
+    return null;
+  }
+
+  // 해당 월의 기록만, 일자·교대 순으로 정렬해 반환
+  function monthRecs() {
+    return cur().recs
+      .filter(function (r) { return r.date.slice(0, 7) === ym; })
+      .sort(function (a, b) {
+        if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+        return (a.shift === "주간" ? 0 : 1) - (b.shift === "주간" ? 0 : 1);
+      });
+  }
+
+  function findRec(date, sh) {
+    var list = cur().recs;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].date === date && list[i].shift === sh) return list[i];
+    }
+    return null;
+  }
+
+  /* =========================================================================
+     헤더 · 설비 탭 · 월 네비게이션
+     ========================================================================= */
+  function renderHead() {
+    var e = EQ[eqId];
+    document.title = "마스터 샘플 트렌드 · " + e.title;
+    $("eqTitle").textContent = e.title;
+    $("mProc").textContent = e.proc;
+    $("mEq").textContent = e.eq;
+    $("mDet").textContent = e.det;
+    $("mPres").textContent = e.pres;
+    $("mCrit").textContent = e.crit;
+    $("mDoc").textContent = e.doc;
+
+    var tabs = $("eqTabs");
+    tabs.innerHTML = "";
+    EQ_IDS.forEach(function (id) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "eq-tab" + (id === eqId ? " on" : "");
+      b.textContent = "공정No." + id + " " + EQ[id].title.replace("리크검사기", "").trim();
+      b.addEventListener("click", function () {
+        if (id === eqId) return;
+        eqId = id;
+        try { history.replaceState(null, "", "?eq=" + id); } catch (err) {}
+        renderAll();
+        syncNow("auto");
+        window.scrollTo(0, 0);
+      });
+      tabs.appendChild(b);
+    });
+  }
+
+  function shiftMonth(delta) {
+    var y = parseInt(ym.slice(0, 4), 10);
+    var m = parseInt(ym.slice(5, 7), 10) + delta;
+    while (m < 1) { m += 12; y -= 1; }
+    while (m > 12) { m -= 12; y += 1; }
+    ym = y + "-" + pad2(m);
+    renderAll();
+    syncNow("auto");
+  }
+
+  function renderMonth() {
+    $("mLabel").textContent = parseInt(ym.slice(0, 4), 10) + "년 " + parseInt(ym.slice(5, 7), 10) + "월";
+    var recs = monthRecs();
+    var days = {};
+    var ng = 0;
+    recs.forEach(function (r) {
+      days[r.date] = 1;
+      r.items.forEach(function (it) { if (it.judge === "NG") ng++; });
+    });
+    var dayCount = Object.keys(days).length;
+    $("mMeta").textContent = dayCount === 0
+      ? "기록 없음"
+      : "점검 " + dayCount + "일 · " + recs.length + "회" + (ng ? " · NG " + ng + "건" : " · 전건 OK");
+    $("nextM").disabled = ym >= todayStr().slice(0, 7);
+  }
+
+  /* =========================================================================
+     ① 입력 폼
+     ========================================================================= */
+  function renderInput() {
+    var box = $("inputSamples");
+    var samples = cur().samples;
+    box.innerHTML = "";
+
+    if (!samples.length) {
+      box.innerHTML = '<div class="empty">등록된 마스터 샘플이 없습니다.<br>④ 마스터 샘플 · 스펙 관리에서 먼저 추가하세요.</div>';
+      return;
+    }
+
+    samples.forEach(function (s) {
+      var row = document.createElement("div");
+      row.className = "srow";
+      row.innerHTML =
+        '<div class="shead">' +
+          '<span class="badge type' + (s.type === "NG" ? " ngm" : "") + '">' + esc(s.type) + '</span>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div class="sname">' + esc(s.name) + '</div>' +
+            '<div class="sspec">' + esc(specText(s)) + '</div>' +
+          '</div>' +
+          '<span class="badge na" data-role="judge">—</span>' +
+        '</div>' +
+        '<div class="sin">' +
+          '<input type="number" step="0.001" inputmode="decimal" placeholder="누설값 입력" data-sid="' + esc(s.id) + '">' +
+          '<span class="unit">' + UNIT + '</span>' +
+        '</div>';
+
+      var input = row.querySelector("input");
+      var badge = row.querySelector('[data-role="judge"]');
+      input.addEventListener("input", function () {
+        var j = judge(num(input.value), s.lsl, s.usl);
+        badge.textContent = j === "-" ? "—" : j;
+        badge.className = "badge " + (j === "OK" ? "ok" : j === "NG" ? "ng" : "na");
+      });
+      box.appendChild(row);
+    });
+
+    fillFormFromRecord();
+  }
+
+  // 선택한 일자·교대에 이미 기록이 있으면 폼에 불러온다 (수정 모드)
+  function fillFormFromRecord() {
+    var rec = findRec($("inDate").value, shift);
+    var inputs = $("inputSamples").querySelectorAll("input[data-sid]");
+
+    for (var i = 0; i < inputs.length; i++) {
+      var sid = inputs[i].getAttribute("data-sid");
+      var v = "";
+      if (rec) {
+        for (var k = 0; k < rec.items.length; k++) {
+          if (rec.items[k].sid === sid && rec.items[k].v !== null) { v = String(rec.items[k].v); break; }
+        }
+      }
+      inputs[i].value = v;
+      inputs[i].dispatchEvent(new Event("input"));
+    }
+
+    if (rec) {
+      $("inTemp").value = rec.temp === null ? "" : rec.temp;
+      $("inUser").value = rec.by || "";
+      $("inNote").value = rec.note || "";
+      $("saveBtn").textContent = "수정 저장";
+      $("saveHint").textContent = "이 일자·교대에 이미 기록이 있습니다. 저장하면 덮어씁니다.";
+    } else {
+      $("inNote").value = "";
+      $("saveBtn").textContent = "저장";
+      $("saveHint").textContent = "같은 일자·교대로 다시 저장하면 기존 기록을 덮어씁니다.";
+      try {
+        if (!$("inUser").value) $("inUser").value = localStorage.getItem(USER_KEY) || "";
+      } catch (e) {}
+    }
+  }
+
+  function doSave() {
+    var date = $("inDate").value;
+    if (!date) { toast("점검 일자를 선택하세요"); return; }
+
+    var samples = cur().samples;
+    if (!samples.length) { toast("먼저 마스터 샘플을 등록하세요"); return; }
+
+    var inputs = $("inputSamples").querySelectorAll("input[data-sid]");
+    var items = [];
+    var filled = 0;
+
+    for (var i = 0; i < inputs.length; i++) {
+      var sid = inputs[i].getAttribute("data-sid");
+      var s = sampleById(sid);
+      if (!s) continue;
+      var v = num(inputs[i].value);
+      if (v !== null) filled++;
+      items.push({
+        sid: sid,
+        name: s.name,     // 샘플명을 지운 뒤에도 과거 기록을 읽을 수 있도록 함께 저장
+        type: s.type,
+        v: v,
+        // 판정 근거를 기록 시점 기준으로 함께 남긴다 (나중에 스펙을 바꿔도 이력이 흔들리지 않음)
+        nominal: s.nominal, lsl: s.lsl, usl: s.usl,
+        judge: judge(v, s.lsl, s.usl)
+      });
+    }
+
+    if (!filled) { toast("누설값을 최소 1개 입력하세요"); return; }
+
+    var rec = findRec(date, shift);
+    var isNew = !rec;
+    if (!rec) {
+      rec = { id: uid(), date: date, shift: shift };
+      cur().recs.push(rec);
+    }
+    rec.items = items;
+    rec.temp = num($("inTemp").value);
+    rec.by = $("inUser").value.trim();
+    rec.note = $("inNote").value.trim();
+    rec.ts = new Date().toISOString();
+
+    if (!save()) return;
+    try { if (rec.by) localStorage.setItem(USER_KEY, rec.by); } catch (e) {}
+
+    ym = date.slice(0, 7);
+    renderAll();
+    afterWrite(syncOn() ? sync.pushRecord(eqId, rec) : null);
+
+    var ngCount = items.filter(function (it) { return it.judge === "NG"; }).length;
+    toast(ngCount
+      ? (isNew ? "저장됨" : "수정됨") + " — NG " + ngCount + "건, 확인 필요"
+      : (isNew ? "저장되었습니다" : "수정되었습니다"));
+  }
+
+  /* =========================================================================
+     ② 꺾은선 그래프 (외부 라이브러리 없이 SVG 직접 생성)
+     ========================================================================= */
+  var W = 320, H = 168, PL = 40, PR = 12, PT = 14, PB = 30;
+
+  function buildChart(s, points) {
+    // points: [{label, v, judge, date, shift}]
+    var xs = [], ys = [];
+    var vals = points.map(function (p) { return p.v; });
+    var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+    if (s.lsl !== null) { lo = Math.min(lo, s.lsl); hi = Math.max(hi, s.lsl); }
+    if (s.usl !== null) { lo = Math.min(lo, s.usl); hi = Math.max(hi, s.usl); }
+    if (s.nominal !== null) { lo = Math.min(lo, s.nominal); hi = Math.max(hi, s.nominal); }
+
+    var span = hi - lo;
+    if (span === 0) { span = Math.max(Math.abs(hi) * 0.2, 1); }
+    lo -= span * 0.15; hi += span * 0.15;
+
+    function X(i) {
+      if (points.length === 1) return PL + (W - PL - PR) / 2;
+      return PL + (W - PL - PR) * (i / (points.length - 1));
+    }
+    function Y(v) {
+      return PT + (H - PT - PB) * (1 - (v - lo) / (hi - lo));
+    }
+
+    var svg = [];
+    svg.push('<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(s.name) + ' 누설값 추이">');
+
+    // 스펙 범위(합격 구간) 음영
+    if (s.lsl !== null || s.usl !== null) {
+      var yTop = s.usl !== null ? Y(s.usl) : PT;
+      var yBot = s.lsl !== null ? Y(s.lsl) : (H - PB);
+      svg.push('<rect x="' + PL + '" y="' + yTop.toFixed(1) + '" width="' + (W - PL - PR) +
+        '" height="' + Math.max(0, yBot - yTop).toFixed(1) + '" fill="#eaf4ee"/>');
+    }
+
+    // Y축 눈금 4단
+    for (var t = 0; t <= 3; t++) {
+      var vv = lo + (hi - lo) * (t / 3);
+      var yy = Y(vv);
+      svg.push('<line x1="' + PL + '" y1="' + yy.toFixed(1) + '" x2="' + (W - PR) + '" y2="' + yy.toFixed(1) +
+        '" stroke="#e6e9ed" stroke-width="1"/>');
+      svg.push('<text x="' + (PL - 5) + '" y="' + (yy + 3).toFixed(1) +
+        '" font-size="8" fill="#9aa3ae" text-anchor="end">' + fmt(Math.round(vv * 100) / 100) + '</text>');
+    }
+
+    // 스펙선 · 지정값선
+    // 상·하한은 오른쪽 끝, 고유 지정값은 왼쪽 끝에 라벨을 두어 서로 겹치지 않게 한다
+    // (지정값 선은 보통 데이터 한가운데를 지나가므로 오른쪽에 두면 꺾은선과 겹침)
+    function refLine(v, color, dash, label, atLeft) {
+      var yy = Y(v);
+      svg.push('<line x1="' + PL + '" y1="' + yy.toFixed(1) + '" x2="' + (W - PR) + '" y2="' + yy.toFixed(1) +
+        '" stroke="' + color + '" stroke-width="1.2" stroke-dasharray="' + dash + '"/>');
+      svg.push('<text x="' + (atLeft ? PL + 3 : W - PR) + '" y="' + (yy - 3).toFixed(1) +
+        '" font-size="7.5" fill="' + color + '" text-anchor="' + (atLeft ? "start" : "end") + '">' + label + '</text>');
+    }
+    if (s.usl !== null) refLine(s.usl, "#c0392b", "4 3", "상한 " + fmt(s.usl), false);
+    if (s.lsl !== null) refLine(s.lsl, "#c0392b", "4 3", "하한 " + fmt(s.lsl), false);
+    if (s.nominal !== null) refLine(s.nominal, "#6d7683", "2 2", "지정 " + fmt(s.nominal), true);
+
+    // 축
+    svg.push('<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (H - PB) + '" stroke="#d3d8de"/>');
+    svg.push('<line x1="' + PL + '" y1="' + (H - PB) + '" x2="' + (W - PR) + '" y2="' + (H - PB) + '" stroke="#d3d8de"/>');
+
+    // 꺾은선
+    if (points.length > 1) {
+      var d = points.map(function (p, i) { return X(i).toFixed(1) + "," + Y(p.v).toFixed(1); }).join(" ");
+      svg.push('<polyline points="' + d + '" fill="none" stroke="#0f6cb0" stroke-width="1.8" ' +
+        'stroke-linejoin="round" stroke-linecap="round"/>');
+    }
+
+    // 점 + X축 라벨 (라벨이 겹치지 않게 솎아냄)
+    var step = Math.ceil(points.length / 8);
+    points.forEach(function (p, i) {
+      var isNg = p.judge === "NG";
+      svg.push('<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(p.v).toFixed(1) + '" r="' + (isNg ? 4 : 3) +
+        '" fill="' + (isNg ? "#c0392b" : "#0f6cb0") + '" stroke="#fff" stroke-width="1.2"/>');
+      if (i % step === 0 || i === points.length - 1) {
+        svg.push('<text x="' + X(i).toFixed(1) + '" y="' + (H - PB + 12) +
+          '" font-size="8" fill="#6d7683" text-anchor="middle">' + esc(p.label) + '</text>');
+      }
+    });
+
+    svg.push('<text x="' + PL + '" y="' + (H - 4) + '" font-size="7.5" fill="#9aa3ae">일자 (' +
+      parseInt(ym.slice(5, 7), 10) + '월)</text>');
+    svg.push('<text x="' + (PL - 5) + '" y="' + (PT - 5) + '" font-size="7.5" fill="#9aa3ae" text-anchor="end">' + UNIT + '</text>');
+    svg.push("</svg>");
+    return svg.join("");
+  }
+
+  function renderChart() {
+    var body = $("chartBody");
+    var samples = cur().samples;
+    var recs = monthRecs();
+    body.innerHTML = "";
+
+    if (!samples.length) {
+      body.innerHTML = '<div class="empty">등록된 마스터 샘플이 없습니다.</div>';
+      return;
+    }
+    if (!recs.length) {
+      body.innerHTML = '<div class="empty">' + parseInt(ym.slice(5, 7), 10) + '월 기록이 없습니다.<br>' +
+        '① 시업 전 점검 입력에서 누설값을 저장하면 그래프가 그려집니다.</div>';
+      return;
+    }
+
+    var drawn = 0;
+    samples.forEach(function (s) {
+      var points = [];
+      recs.forEach(function (r) {
+        r.items.forEach(function (it) {
+          if (it.sid !== s.id || it.v === null) return;
+          points.push({
+            label: parseInt(r.date.slice(8, 10), 10) + (r.shift === "야간" ? "야" : ""),
+            v: it.v, judge: it.judge, date: r.date, shift: r.shift
+          });
+        });
+      });
+      if (!points.length) return;
+      drawn++;
+
+      var ngN = points.filter(function (p) { return p.judge === "NG"; }).length;
+      var card = document.createElement("div");
+      card.className = "chart-card";
+      card.innerHTML =
+        '<div class="ch-head">' +
+          '<span class="badge type' + (s.type === "NG" ? " ngm" : "") + '">' + esc(s.type) + '</span>' +
+          '<span class="ch-name">' + esc(s.name) + '</span>' +
+          '<span class="badge ' + (ngN ? "ng" : "ok") + '" style="margin-left:auto;">' +
+            (ngN ? "NG " + ngN + "건" : "전건 OK") + '</span>' +
+        '</div>' +
+        '<div class="ch-spec">' + esc(specText(s)) + ' · ' + points.length + '회 기록</div>' +
+        buildChart(s, points) +
+        '<div class="ch-legend">' +
+          '<span><i style="background:#0f6cb0;"></i>누설값</span>' +
+          '<span><i style="background:#c0392b;"></i>상·하한</span>' +
+          '<span><i style="background:#6d7683;"></i>고유 지정값</span>' +
+          '<span><i style="background:#eaf4ee;height:8px;"></i>합격 범위</span>' +
+          '<span style="width:100%;">가로축 = 일자 (숫자 뒤 &ldquo;야&rdquo; = 야간 교대) · 빨간 점 = 스펙 이탈</span>' +
+        '</div>';
+      body.appendChild(card);
+    });
+
+    if (!drawn) {
+      body.innerHTML = '<div class="empty">' + parseInt(ym.slice(5, 7), 10) + '월에 입력된 누설값이 없습니다.</div>';
+    }
+  }
+
+  /* =========================================================================
+     ③ 월별 기록표
+     ========================================================================= */
+  function renderList() {
+    var body = $("listBody");
+    var recs = monthRecs();
+    var samples = cur().samples;
+    body.innerHTML = "";
+
+    if (!recs.length) {
+      body.innerHTML = '<div class="empty">' + parseInt(ym.slice(5, 7), 10) + '월 기록이 없습니다.</div>';
+      return;
+    }
+
+    var h = '<div class="table-scroll"><table class="hist"><tr>' +
+      '<th>일자</th><th>교대</th>';
+    samples.forEach(function (s) {
+      h += '<th>' + esc(s.name).replace(/\(/g, "<br>(") + '<br>(' + UNIT + ')</th>';
+    });
+    h += '<th class="temp-h">설비주변온도</th><th>확인자</th><th class="note-h">비고</th><th class="act">—</th></tr>';
+
+    recs.forEach(function (r) {
+      h += "<tr>";
+      h += "<td>" + esc(r.date.slice(5)) + "</td><td>" + esc(r.shift) + "</td>";
+      samples.forEach(function (s) {
+        var cell = "";
+        var cls = "v";
+        for (var i = 0; i < r.items.length; i++) {
+          var it = r.items[i];
+          if (it.sid !== s.id) continue;
+          if (it.v === null) break;
+          cell = fmt(it.v) + (it.judge === "NG" ? " NG" : "");
+          if (it.judge === "NG") cls += " ng";
+          break;
+        }
+        h += '<td class="' + cls + '">' + esc(cell) + "</td>";
+      });
+      h += "<td>" + (r.temp === null || r.temp === undefined ? "" : esc(fmt(r.temp) + "℃")) + "</td>";
+      h += "<td>" + esc(r.by || "") + "</td>";
+      h += '<td class="note">' + esc(r.note || "") + "</td>";
+      h += '<td class="act"><button class="mini" data-edit="' + esc(r.id) + '">수정</button>' +
+           '<button class="mini" data-del="' + esc(r.id) + '" style="margin-top:4px;">삭제</button></td>';
+      h += "</tr>";
+    });
+    h += "</table></div>";
+    h += '<p class="hint">스펙을 벗어난 값은 빨간색으로 표시됩니다. 수정을 누르면 ① 입력 폼에 해당 기록이 불러와집니다.</p>';
+    body.innerHTML = h;
+
+    body.querySelectorAll("[data-edit]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var rec = null, list = cur().recs;
+        for (var i = 0; i < list.length; i++) if (list[i].id === b.getAttribute("data-edit")) rec = list[i];
+        if (!rec) return;
+        $("inDate").value = rec.date;
+        setShift(rec.shift);
+        fillFormFromRecord();
+        $("secInput").open = true;
+        $("secInput").scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+
+    body.querySelectorAll("[data-del]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var id = b.getAttribute("data-del");
+        var rec = null, list = cur().recs;
+        for (var i = 0; i < list.length; i++) if (list[i].id === id) rec = list[i];
+        if (!rec) return;
+        if (!confirm(rec.date + " " + rec.shift + " 기록을 삭제할까요?\n삭제하면 되돌릴 수 없습니다.")) return;
+        cur().recs = list.filter(function (r) { return r.id !== id; });
+        save();
+        renderAll();
+        afterWrite(syncOn() ? sync.deleteRecord(eqId, rec) : null);
+        toast("삭제되었습니다");
+      });
+    });
+  }
+
+  /* =========================================================================
+     ④ 마스터 샘플 · 스펙 관리
+     ========================================================================= */
+  function renderSpec() {
+    var body = $("specBody");
+    var samples = cur().samples;
+    body.innerHTML = "";
+
+    if (!samples.length) {
+      body.innerHTML = '<div class="empty" style="margin-bottom:10px;">등록된 마스터 샘플이 없습니다.</div>';
+      return;
+    }
+
+    samples.forEach(function (s) {
+      var used = cur().recs.some(function (r) {
+        return r.items.some(function (it) { return it.sid === s.id && it.v !== null; });
+      });
+
+      var row = document.createElement("div");
+      row.className = "srow";
+      row.innerHTML =
+        '<div class="fld"><label>샘플명</label>' +
+          '<input type="text" data-f="name" value="' + esc(s.name) + '" autocomplete="off"></div>' +
+        '<div class="fld"><label>구분</label>' +
+          '<select data-f="type">' +
+            '<option value="OK"' + (s.type === "OK" ? " selected" : "") + '>OK 마스터</option>' +
+            '<option value="NG"' + (s.type === "NG" ? " selected" : "") + '>NG 마스터</option>' +
+          '</select></div>' +
+        '<div class="fld-row">' +
+          '<div class="fld"><label>고유 지정값</label>' +
+            '<input type="number" step="0.001" inputmode="decimal" data-f="nominal" value="' + esc(fmt(s.nominal)) + '" placeholder="—"></div>' +
+          '<div class="fld"><label>하한값</label>' +
+            '<input type="number" step="0.001" inputmode="decimal" data-f="lsl" value="' + esc(fmt(s.lsl)) + '" placeholder="—"></div>' +
+          '<div class="fld"><label>상한값</label>' +
+            '<input type="number" step="0.001" inputmode="decimal" data-f="usl" value="' + esc(fmt(s.usl)) + '" placeholder="—"></div>' +
+        '</div>' +
+        '<div class="btn-row">' +
+          '<button class="btn sub" data-a="apply">이 샘플 저장</button>' +
+          '<button class="btn danger" data-a="del">삭제</button>' +
+        '</div>' +
+        (used ? '<p class="hint">이 샘플에는 이미 기록이 있습니다. 삭제하면 지난 기록의 값도 함께 사라집니다.</p>' : "");
+
+      row.querySelector('[data-a="apply"]').addEventListener("click", function () {
+        var name = row.querySelector('[data-f="name"]').value.trim();
+        if (!name) { toast("샘플명을 입력하세요"); return; }
+        var lsl = num(row.querySelector('[data-f="lsl"]').value);
+        var usl = num(row.querySelector('[data-f="usl"]').value);
+        if (lsl !== null && usl !== null && lsl > usl) { toast("하한값이 상한값보다 큽니다"); return; }
+        s.name = name;
+        s.type = row.querySelector('[data-f="type"]').value;
+        s.nominal = num(row.querySelector('[data-f="nominal"]').value);
+        s.lsl = lsl;
+        s.usl = usl;
+        save();
+        renderAll();
+        afterWrite(pushCurrentSamples());
+        toast("스펙이 저장되었습니다");
+      });
+
+      row.querySelector('[data-a="del"]').addEventListener("click", function () {
+        if (!confirm('"' + s.name + '" 샘플을 삭제할까요?' +
+          (used ? "\n이 샘플로 기록된 지난 누설값도 함께 사라집니다." : ""))) return;
+        cur().samples = cur().samples.filter(function (x) { return x.id !== s.id; });
+        cur().recs.forEach(function (r) {
+          r.items = r.items.filter(function (it) { return it.sid !== s.id; });
+        });
+        cur().recs = cur().recs.filter(function (r) { return r.items.length; });
+        save();
+        renderAll();
+        afterWrite(pushCurrentSamples());
+        toast("삭제되었습니다");
+      });
+
+      body.appendChild(row);
+    });
+  }
+
+  function addSample() {
+    var name = prompt("추가할 마스터 샘플 이름을 입력하세요\n(예: OK 마스터(하우징), NG 마스터)");
+    if (name === null) return;
+    name = name.trim();
+    if (!name) return;
+    cur().samples.push({
+      id: uid(), name: name,
+      type: /NG/i.test(name) ? "NG" : "OK",
+      nominal: null, lsl: null, usl: null
+    });
+    save();
+    renderAll();
+    afterWrite(pushCurrentSamples());
+    $("secSpec").open = true;
+    toast("추가되었습니다 — 지정값과 스펙을 입력하세요");
+  }
+
+  /* =========================================================================
+     ⑤ 백업 · 내보내기
+     ========================================================================= */
+  function download(filename, text, mime) {
+    var blob = new Blob([text], { type: mime + ";charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+  }
+
+  function csvCell(v) {
+    var s = v === null || v === undefined ? "" : String(v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  function exportCsv() {
+    var recs = cur().recs.slice().sort(function (a, b) {
+      return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
+    });
+    if (!recs.length) { toast("내보낼 기록이 없습니다"); return; }
+
+    var rows = [["공정No.", "설비명", "일자", "교대", "샘플명", "구분",
+                 "고유지정값", "하한값", "상한값", "누설값(" + UNIT + ")",
+                 "판정", "설비주변온도(℃)", "확인자", "비고"]];
+    recs.forEach(function (r) {
+      r.items.forEach(function (it) {
+        if (it.v === null) return;
+        rows.push([eqId, EQ[eqId].title, r.date, r.shift, it.name, it.type,
+                   fmt(it.nominal), fmt(it.lsl), fmt(it.usl), fmt(it.v),
+                   it.judge, r.temp === null || r.temp === undefined ? "" : fmt(r.temp),
+                   r.by || "", r.note || ""]);
+      });
+    });
+
+    // 엑셀이 한글을 깨뜨리지 않도록 UTF-8 BOM 을 붙인다
+    var csv = "﻿" + rows.map(function (r) { return r.map(csvCell).join(","); }).join("\r\n");
+    download("마스터샘플_누설값_공정No" + eqId + "_" + todayStr() + ".csv", csv, "text/csv");
+    toast("CSV 파일을 내보냈습니다");
+  }
+
+  function exportBackup() {
+    download("마스터샘플_백업_" + todayStr() + ".json", JSON.stringify(db, null, 1), "application/json");
+    toast("백업 파일을 내보냈습니다");
+  }
+
+  function importBackup(file) {
+    var fr = new FileReader();
+    fr.onload = function () {
+      var data;
+      try { data = JSON.parse(fr.result); } catch (e) {
+        toast("백업 파일 형식이 올바르지 않습니다"); return;
+      }
+      if (!data || !data.eq) { toast("백업 파일 형식이 올바르지 않습니다"); return; }
+      if (!confirm("백업 파일을 불러오면 지금 이 폰에 저장된 기록을 모두 덮어씁니다.\n계속할까요?")) return;
+      db = data;
+      EQ_IDS.forEach(function (id) {
+        if (!db.eq[id]) db.eq[id] = blankEq(id);
+        if (!Array.isArray(db.eq[id].samples)) db.eq[id].samples = [];
+        if (!Array.isArray(db.eq[id].recs)) db.eq[id].recs = [];
+      });
+      save();
+      renderAll();
+      toast("불러오기가 완료되었습니다");
+    };
+    fr.readAsText(file);
+  }
+
+  function wipeEq() {
+    var n = cur().recs.length;
+    if (!n) { toast("삭제할 기록이 없습니다"); return; }
+    if (!confirm("공정No." + eqId + " 의 기록 " + n + "건을 모두 삭제할까요?\n되돌릴 수 없습니다. 먼저 백업을 받으시는 것을 권장합니다.")) return;
+    if (!confirm("정말 삭제할까요? 마지막 확인입니다.")) return;
+    var removed = cur().recs.slice();
+    cur().recs = [];
+    save();
+    renderAll();
+    if (syncOn()) {
+      // 구글시트 쪽도 같은 설비의 기록을 전부 지운다
+      afterWrite(sync.wipe(eqId).then(function (res) {
+        if (res && res.queued) return res;
+        return { ok: true, removed: removed.length };
+      }));
+    }
+    toast("전체 삭제되었습니다");
+  }
+
+  function renderDataStat() {
+    var total = 0;
+    EQ_IDS.forEach(function (id) { total += db.eq[id].recs.length; });
+    $("dataStat").textContent =
+      "이 설비 기록 " + cur().recs.length + "건 · 전체 4개 설비 합계 " + total + "건";
+  }
+
+  /* =========================================================================
+     구글시트 동기화 (leak-sync.js)
+     - 연동 주소가 없으면 전부 건너뛰고 지금까지처럼 이 폰에만 저장한다.
+     - 저장은 항상 폰에 먼저 하고, 전송은 그 뒤에 한다 (전파가 약해도 입력이 막히지 않게).
+     ========================================================================= */
+  var sync = window.dnkSync || null;
+  var lastSyncAt = "";
+
+  function syncOn() { return !!(sync && sync.enabled()); }
+
+  function setSync(state, text) {
+    var bar = $("syncBar");
+    bar.className = "sync-bar" + (state ? " " + state : "");
+    $("syncText").textContent = text;
+  }
+
+  function refreshSyncBar() {
+    if (!syncOn()) {
+      setSync("warn", "이 폰에만 저장됨 — ⑤에서 구글시트 연동");
+      return;
+    }
+    var q = sync.queueSize();
+    if (q) setSync("warn", "미전송 " + q + "건 — 새로고침을 눌러 전송하세요");
+    else setSync("on", "구글시트 연동됨" + (lastSyncAt ? " · " + lastSyncAt + " 기준" : ""));
+  }
+
+  // 서버에서 받은 내용을 이 폰 데이터에 반영한다.
+  // 해당 설비·해당 달의 기록은 서버 것을 정답으로 보고 통째로 교체한다
+  // (미전송 건이 남아 있으면 이 함수까지 오지 않는다 — syncNow 참고).
+  function applyPulled(data, eqAt, ymAt) {
+    if (eqAt !== eqId || ymAt !== ym) return false;   // 그 사이 사용자가 화면을 바꿨으면 버림
+    var e = db.eq[eqAt];
+
+    if (data.samples && data.samples.length) {
+      e.samples = data.samples.map(function (s) {
+        return { id: s.id, name: s.name, type: s.type === "NG" ? "NG" : "OK",
+                 nominal: s.nominal, lsl: s.lsl, usl: s.usl };
+      });
+    }
+
+    e.recs = e.recs.filter(function (r) { return r.date.slice(0, 7) !== ymAt; })
+                   .concat(data.recs || []);
+    save();
+    return true;
+  }
+
+  // reason: "auto"(화면 전환) | "manual"(새로고침 버튼)
+  function syncNow(reason) {
+    if (!syncOn()) { refreshSyncBar(); return Promise.resolve(); }
+
+    var eqAt = eqId, ymAt = ym;
+    setSync("busy", reason === "manual" ? "동기화 중…" : "불러오는 중…");
+
+    return sync.flush().then(function (res) {
+      if (res && res.left) {
+        setSync("warn", "미전송 " + res.left + "건 — 통신이 되면 자동으로 다시 보냅니다");
+        return null;                                   // 미전송이 남으면 내려받지 않는다
+      }
+      return sync.pull(eqAt, ymAt);
+    }).then(function (data) {
+      if (!data) return;
+      if (applyPulled(data, eqAt, ymAt)) {
+        lastSyncAt = new Date().toTimeString().slice(0, 5);
+        renderAll();
+        if (reason === "manual") toast("구글시트에서 불러왔습니다");
+      }
+      refreshSyncBar();
+    })["catch"](function (err) {
+      setSync("err", "연동 오류 — " + err.message);
+      if (reason === "manual") toast(err.message);
+    });
+  }
+
+  // 저장·삭제·스펙변경 뒤에 호출 — 실패해도 leak-sync.js가 대기열에 넣어 주므로 화면은 계속 진행
+  function afterWrite(promise) {
+    if (!promise) { refreshSyncBar(); return; }
+    setSync("busy", "전송 중…");
+    promise.then(function (res) {
+      if (res && res.queued) setSync("warn", "전송 실패 — 미전송 " + sync.queueSize() + "건으로 보관했습니다");
+      else refreshSyncBar();
+    }, function () { refreshSyncBar(); });
+  }
+
+  function pushCurrentSamples() {
+    if (!syncOn()) return null;
+    return sync.pushSamples(eqId, cur().samples);
+  }
+
+  function renderSyncSetup() {
+    var desc = $("syncDesc");
+    var box = $("syncSetup");
+    box.innerHTML = "";
+
+    if (!sync) {
+      desc.textContent = "leak-sync.js 를 불러오지 못했습니다. 파일이 사이트에 함께 올라가 있는지 확인하세요.";
+      return;
+    }
+
+    if (sync.urlIsFixed()) {
+      desc.innerHTML = "이 사이트에 <b>구글시트 연동이 설정되어 있습니다.</b> 작업자가 어느 폰으로 들어와도 같은 데이터를 보게 됩니다. 주소를 바꾸려면 <code>leak-sync.js</code> 의 URL 을 수정해 다시 올리세요.";
+    } else if (sync.enabled()) {
+      desc.innerHTML = "<b>이 폰에서만</b> 연동 주소를 시험 중입니다. 모든 폰이 공유하게 하려면 이 주소를 <code>leak-sync.js</code> 의 URL 에 적어 사이트에 올려야 합니다.";
+    } else {
+      desc.innerHTML = "연동 전에는 기록이 이 폰에만 남습니다. 구글시트 연동을 켜면 <b>작업자마다 폰이 달라도 같은 데이터</b>를 보게 됩니다 (작업자는 계정이 필요 없습니다). 설정 방법은 <code>구글시트_연동_설정방법.md</code> 참고.";
+    }
+
+    if (!sync.urlIsFixed()) {
+      var f = document.createElement("div");
+      f.innerHTML =
+        '<div class="fld"><label for="syncUrl">연동 주소 (Apps Script 웹 앱 URL)</label>' +
+        '<input type="url" id="syncUrl" placeholder="https://script.google.com/macros/s/.../exec" ' +
+        'autocomplete="off" value="' + esc(sync.getUrl()) + '"></div>' +
+        '<div class="btn-row"><button class="btn sub" id="syncTest">연결 시험</button>' +
+        '<button class="btn sub" id="syncSave">주소 저장</button></div>';
+      box.appendChild(f);
+
+      $("syncSave").addEventListener("click", function () {
+        sync.setUrl($("syncUrl").value);
+        renderSyncSetup();
+        refreshSyncBar();
+        toast(sync.enabled() ? "주소를 저장했습니다" : "주소를 지웠습니다");
+        if (sync.enabled()) syncNow("manual");
+      });
+
+      $("syncTest").addEventListener("click", function () {
+        var u = $("syncUrl").value.trim();
+        if (!u) { toast("주소를 입력하세요"); return; }
+        var keep = sync.getUrl();
+        sync.setUrl(u);
+        toast("연결 시험 중…");
+        sync.ping().then(function (d) {
+          toast("연결 성공 — 서버 시각 " + String(d.time).replace("T", " "));
+        }, function (err) {
+          sync.setUrl(keep);
+          alert("연결 실패\n\n" + err.message +
+            "\n\n확인할 점\n· 주소가 /exec 로 끝나는지\n· 배포 시 '액세스 권한: 모든 사용자'로 했는지\n· Code.gs 의 TOKEN 이 leak-sync.js 와 같은지");
+        });
+      });
+    }
+
+    var q = sync.queueSize();
+    if (q) {
+      var b = document.createElement("button");
+      b.className = "btn sub";
+      b.style.marginTop = "8px";
+      b.textContent = "미전송 " + q + "건 지금 전송";
+      b.addEventListener("click", function () { syncNow("manual").then(renderSyncSetup); });
+      box.appendChild(b);
+    }
+  }
+
+  /* =========================================================================
+     교대 선택
+     ========================================================================= */
+  function setShift(v) {
+    shift = v;
+    var btns = $("shiftSeg").querySelectorAll("button");
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle("on", btns[i].getAttribute("data-shift") === v);
+    }
+  }
+
+  /* =========================================================================
+     렌더 · 초기화
+     ========================================================================= */
+  function renderAll() {
+    renderHead();
+    renderMonth();
+    renderInput();
+    renderChart();
+    renderList();
+    renderSpec();
+    renderDataStat();
+    renderSyncSetup();
+    refreshSyncBar();
+  }
+
+  function init() {
+    load();
+
+    var q = null;
+    try { q = new URLSearchParams(location.search).get("eq"); } catch (e) {}
+    if (q && EQ[q]) eqId = q;
+
+    ym = todayStr().slice(0, 7);
+    $("inDate").value = todayStr();
+
+    $("prevM").addEventListener("click", function () { shiftMonth(-1); });
+    $("nextM").addEventListener("click", function () { shiftMonth(1); });
+
+    $("inDate").addEventListener("change", function () {
+      if ($("inDate").value) { ym = $("inDate").value.slice(0, 7); renderMonth(); renderChart(); renderList(); }
+      fillFormFromRecord();
+    });
+
+    $("shiftSeg").addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-shift]");
+      if (!b) return;
+      setShift(b.getAttribute("data-shift"));
+      fillFormFromRecord();
+    });
+
+    $("syncBtn").addEventListener("click", function () { syncNow("manual"); });
+    $("saveBtn").addEventListener("click", doSave);
+    $("addSampleBtn").addEventListener("click", addSample);
+    $("csvBtn").addEventListener("click", exportCsv);
+    $("backupBtn").addEventListener("click", exportBackup);
+    $("wipeBtn").addEventListener("click", wipeEq);
+    $("restoreBtn").addEventListener("click", function () { $("restoreFile").click(); });
+    $("restoreFile").addEventListener("change", function (e) {
+      if (e.target.files && e.target.files[0]) importBackup(e.target.files[0]);
+      e.target.value = "";
+    });
+
+    renderAll();
+    syncNow("auto");
+
+    // 전파가 돌아오면 미전송분을 자동으로 다시 보낸다
+    window.addEventListener("online", function () { syncNow("auto"); });
+  }
+
+  // gate.js 가 암호를 통과시킨 뒤에 화면을 구성한다 (게이트가 없으면 즉시 실행)
+  var ready = (window.dnkGate && window.dnkGate.ready) || Promise.resolve();
+  ready.then(function () {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  });
+})();
+</script>
+
+</body>
+</html>
