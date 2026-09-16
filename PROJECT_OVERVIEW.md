@@ -18,9 +18,12 @@
 | 항목 | 내용 |
 |---|---|
 | 로컬 개발 환경 | `C:\Users\user\Desktop\후공정 리크 설비 마스터 샘플 기록관리 프로젝트` |
-| 저장소 | (생성 예정 — 별도 안내) |
-| 배포 방식 | GitHub Pages (project site, `https://<계정>.github.io/<저장소명>/` 형태) |
+| 저장소 | [`dongnam959/eawd-leak-management`](https://github.com/dongnam959/eawd-leak-management) |
+| 브랜치 | `main` (단일 브랜치) |
+| 배포 방식 | GitHub Pages (project site — QR 정보관리 시스템과 달리 `<계정>.github.io` 루트가 아니라 `<계정>.github.io/<저장소명>/` 하위 경로) |
+| 실서비스 주소 | https://dongnam959.github.io/eawd-leak-management/ |
 | 빌드 도구 | 없음 — 순수 정적 HTML/CSS/JS |
+| 저장소 생성 | 2026-09-16, GitHub CLI(`gh repo create`)로 생성 + Pages API로 활성화 |
 
 ---
 
@@ -62,14 +65,16 @@
 
 ## 6. QR 코드
 
-`qr-codes/eq-120.png` 등 4개는 **예전 저장소 주소를 기준으로 생성된 것이라 그대로 쓸 수 없다.** 새 저장소 주소가 정해지면 아래 형태로 재생성 필요:
+`tools/make_qr.py` 로 생성. 저장소 주소가 확정된 뒤(2026-09-16) 아래 최종 주소로 재생성 완료:
 
-```
-https://<계정>.github.io/<저장소명>/?eq=120
-https://<계정>.github.io/<저장소명>/?eq=130
-https://<계정>.github.io/<저장소명>/?eq=180
-https://<계정>.github.io/<저장소명>/?eq=190
-```
+| 파일 | 대상 | 주소 |
+|---|---|---|
+| `qr-codes/eq-120.png` | 공정No.120 (조립전 유로계) | `https://dongnam959.github.io/eawd-leak-management/?eq=120` |
+| `qr-codes/eq-130.png` | 공정No.130 (조립전 전체계) | `https://dongnam959.github.io/eawd-leak-management/?eq=130` |
+| `qr-codes/eq-180.png` | 공정No.180 (조립후 유로계) | `https://dongnam959.github.io/eawd-leak-management/?eq=180` |
+| `qr-codes/eq-190.png` | 공정No.190 (조립후 전체계) | `https://dongnam959.github.io/eawd-leak-management/?eq=190` |
+
+저장소 이름을 바꾸면 주소가 바뀌므로 `tools/make_qr.py` 의 `BASE` 값을 맞추고 다시 실행해야 한다 (그러면 현장에 붙인 QR 라벨도 재발급 필요).
 
 ---
 
