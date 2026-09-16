@@ -6,24 +6,33 @@
     해당 마크업이 없는 페이지에서는 그냥 무시되므로 공용으로 합쳤습니다.
   - 홈(index.html)·PDF 뷰어(pdf-viewer.html)는 레이아웃이 달라 각자의 <style>을 유지합니다.
 */
+  /*
+    2026-09-18: 색상 팔레트를 네이비+시안(QR 정보시스템과 공유하던 톤)에서
+    따뜻한 크림 배경 + 다크 틸 강조 쪽으로 바꿨다 (사용자가 준 참고 이미지 —
+    "Neo-Skeuomorphic Tactile" UI 키트 색감). 변수 이름은 그대로 두고 값만
+    바꿨으므로, 이 파일 밖의 index.html/gate.js에 남아 있던 하드코딩 hex도
+    같은 자리에서 이 팔레트로 맞춰 바꿨다(그 파일들의 변경 이력 참고).
+    이 변경은 이 저장소(누설값 관리 시스템)에만 적용되며, 별도 저장소인
+    QR 정보관리 시스템의 styles.css(동일 이름, 다른 파일)는 건드리지 않았다.
+  */
   :root{
-    --navy:#0a2540;
-    --navy-2:#0f3255;
-    --steel:#1a4971;
-    --accent:#0f6cb0;
-    --gray-900:#181d22;
-    --gray-700:#454e57;
-    --gray-500:#6d7683;
-    --gray-400:#9aa3ae;
-    --gray-300:#d3d8de;
-    --gray-200:#e6e9ed;
-    --gray-100:#f4f6f8;
-    --white:#ffffff;
-    --ok-bg:#eaf4ee;
-    --ok-text:#1c6b41;
-    --warn-bg:#fbf3e2;
+    --navy:#1b4a49;
+    --navy-2:#235857;
+    --steel:#3d7a78;
+    --accent:#2f6e6c;
+    --gray-900:#2b2621;
+    --gray-700:#5c5449;
+    --gray-500:#8a8071;
+    --gray-400:#b3a896;
+    --gray-300:#d8cfbd;
+    --gray-200:#e6dfd0;
+    --gray-100:#ede7da;
+    --white:#faf8f1;
+    --ok-bg:#e3eedc;
+    --ok-text:#3e6b2e;
+    --warn-bg:#f7ecd8;
     --warn-text:#8a5a12;
-    --line:#d3d8de;
+    --line:#d8cfbd;
   }
   *{box-sizing:border-box;}
   html{-webkit-text-size-adjust:100%;}
@@ -65,7 +74,7 @@
     font-size:11px;
     font-weight:700;
     letter-spacing:.14em;
-    color:#8fb3d6;
+    color:#9fc4c0;
     margin:0 0 4px;
   }
   .doc-header h1{

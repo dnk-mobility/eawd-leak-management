@@ -35,7 +35,7 @@
     padding:9px 12px;display:flex;align-items:center;justify-content:space-between;
   }
   .month-bar .mv .label{font-size:15px;font-weight:800;letter-spacing:.01em;}
-  .month-bar .mv .meta{font-size:10.5px;color:#8fb3d6;font-weight:600;}
+  .month-bar .mv .meta{font-size:10.5px;color:#9fc4c0;font-weight:600;}
 
   .sync-bar{
     max-width:640px;margin:8px auto 0;padding:0 14px;
@@ -49,10 +49,10 @@
   .sync-bar .dot{
     width:7px;height:7px;border-radius:50%;background:var(--gray-400);flex-shrink:0;
   }
-  .sync-bar.on .dot{background:#1c9d5c;}
+  .sync-bar.on .dot{background:#4a8f3e;}
   .sync-bar.busy .dot{background:var(--accent);}
   .sync-bar.warn .dot{background:#c8981f;}
-  .sync-bar.err .dot{background:#c0392b;}
+  .sync-bar.err .dot{background:#b8453a;}
   .sync-bar .txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .sync-bar button{
     flex-shrink:0;border:1px solid var(--line);background:var(--white);border-radius:6px;
@@ -101,10 +101,14 @@
   .srow .sspec{font-size:10.5px;color:var(--gray-500);font-variant-numeric:tabular-nums;margin-top:1px;}
   .srow .sin{display:flex;align-items:center;gap:8px;}
   .srow .sin input{
-    flex:0 1 50%;box-sizing:border-box;font-family:inherit;font-size:17px;font-weight:700;
-    padding:10px;border:1px solid var(--gray-300);border-radius:6px;
+    flex:0 1 50%;max-width:50%;width:50%;min-width:0;box-sizing:border-box;
+    font-family:inherit;font-size:17px;font-weight:700;
+    padding:10px 8px;border:1px solid var(--gray-300);border-radius:6px;
     text-align:right;font-variant-numeric:tabular-nums;background:var(--white);
+    -webkit-appearance:textfield;appearance:textfield;
   }
+  .srow .sin input::-webkit-outer-spin-button,
+  .srow .sin input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
   .srow .unit{font-size:11px;color:var(--gray-500);flex-shrink:0;}
 
   .badge{
@@ -112,7 +116,7 @@
     letter-spacing:.02em;
   }
   .badge.ok{background:var(--ok-bg);color:var(--ok-text);}
-  .badge.ng{background:#fbeae8;color:#a5372c;}
+  .badge.ng{background:#f5e3df;color:#8f3226;}
   .badge.na{background:var(--gray-200);color:var(--gray-500);}
   .badge.type{background:var(--navy);color:#fff;}
   .badge.type.ngm{background:#8a5a12;}
@@ -123,7 +127,7 @@
   }
   .btn:active{opacity:.85;}
   .btn.sub{background:var(--white);color:var(--navy);border:1px solid var(--gray-300);font-size:13px;padding:11px;font-weight:700;}
-  .btn.danger{background:var(--white);color:#a5372c;border:1px solid #e3c4c0;font-size:13px;padding:11px;font-weight:700;}
+  .btn.danger{background:var(--white);color:#8f3226;border:1px solid #dcbcb5;font-size:13px;padding:11px;font-weight:700;}
   .btn + .btn{margin-top:8px;}
   .btn-row{display:flex;gap:8px;}
   .btn-row .btn{margin-top:0;}
@@ -149,7 +153,7 @@
     font-family:inherit;font-size:10.5px;padding:3px 7px;cursor:pointer;color:var(--gray-700);
   }
   table.hist td.v{font-weight:700;font-variant-numeric:tabular-nums;}
-  table.hist td.v.ng{color:#a5372c;}
+  table.hist td.v.ng{color:#8f3226;}
 
   .toast{
     position:fixed;left:50%;bottom:26px;transform:translateX(-50%);
@@ -714,15 +718,15 @@
     var svg = [];
     svg.push('<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(s.name) + ' 누설값 추이">');
     svg.push('<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="#fff"/>');
-    if (titleLine1) svg.push('<text x="' + PL + '" y="9" font-size="8.5" font-weight="700" fill="#0a2540">' + esc(titleLine1) + '</text>');
-    if (titleLine2) svg.push('<text x="' + PL + '" y="19" font-size="7.5" fill="#454e57">' + esc(titleLine2) + '</text>');
+    if (titleLine1) svg.push('<text x="' + PL + '" y="9" font-size="8.5" font-weight="700" fill="#1b4a49">' + esc(titleLine1) + '</text>');
+    if (titleLine2) svg.push('<text x="' + PL + '" y="19" font-size="7.5" fill="#5c5449">' + esc(titleLine2) + '</text>');
 
     // 스펙 범위(합격 구간) 음영
     if (s.lsl !== null || s.usl !== null) {
       var yTop = s.usl !== null ? Y(s.usl) : PT;
       var yBot = s.lsl !== null ? Y(s.lsl) : (H - PB);
       svg.push('<rect x="' + PL + '" y="' + yTop.toFixed(1) + '" width="' + (W - PL - PR) +
-        '" height="' + Math.max(0, yBot - yTop).toFixed(1) + '" fill="#eaf4ee"/>');
+        '" height="' + Math.max(0, yBot - yTop).toFixed(1) + '" fill="#e3eedc"/>');
     }
 
     // Y축 눈금 4단
@@ -730,9 +734,9 @@
       var vv = lo + (hi - lo) * (t / 3);
       var yy = Y(vv);
       svg.push('<line x1="' + PL + '" y1="' + yy.toFixed(1) + '" x2="' + (W - PR) + '" y2="' + yy.toFixed(1) +
-        '" stroke="#e6e9ed" stroke-width="1"/>');
+        '" stroke="#e6dfd0" stroke-width="1"/>');
       svg.push('<text x="' + (PL - 5) + '" y="' + (yy + 3).toFixed(1) +
-        '" font-size="8" fill="#9aa3ae" text-anchor="end">' + fmt(Math.round(vv * 100) / 100) + '</text>');
+        '" font-size="8" fill="#b3a896" text-anchor="end">' + fmt(Math.round(vv * 100) / 100) + '</text>');
     }
 
     // 스펙선 · 지정값선
@@ -745,18 +749,18 @@
       svg.push('<text x="' + (atLeft ? PL + 3 : W - PR) + '" y="' + (yy - 3).toFixed(1) +
         '" font-size="7.5" fill="' + color + '" text-anchor="' + (atLeft ? "start" : "end") + '">' + label + '</text>');
     }
-    if (s.usl !== null) refLine(s.usl, "#c0392b", "4 3", "상한 " + fmt(s.usl), false);
-    if (s.lsl !== null) refLine(s.lsl, "#c0392b", "4 3", "하한 " + fmt(s.lsl), false);
-    if (s.nominal !== null) refLine(s.nominal, "#6d7683", "2 2", "지정 " + fmt(s.nominal), true);
+    if (s.usl !== null) refLine(s.usl, "#b8453a", "4 3", "상한 " + fmt(s.usl), false);
+    if (s.lsl !== null) refLine(s.lsl, "#b8453a", "4 3", "하한 " + fmt(s.lsl), false);
+    if (s.nominal !== null) refLine(s.nominal, "#8a8071", "2 2", "지정 " + fmt(s.nominal), true);
 
     // 축
-    svg.push('<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (H - PB) + '" stroke="#d3d8de"/>');
-    svg.push('<line x1="' + PL + '" y1="' + (H - PB) + '" x2="' + (W - PR) + '" y2="' + (H - PB) + '" stroke="#d3d8de"/>');
+    svg.push('<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (H - PB) + '" stroke="#d8cfbd"/>');
+    svg.push('<line x1="' + PL + '" y1="' + (H - PB) + '" x2="' + (W - PR) + '" y2="' + (H - PB) + '" stroke="#d8cfbd"/>');
 
     // 꺾은선
     if (points.length > 1) {
       var d = points.map(function (p, i) { return X(i).toFixed(1) + "," + Y(p.v).toFixed(1); }).join(" ");
-      svg.push('<polyline points="' + d + '" fill="none" stroke="#0f6cb0" stroke-width="1.8" ' +
+      svg.push('<polyline points="' + d + '" fill="none" stroke="#2f6e6c" stroke-width="1.8" ' +
         'stroke-linejoin="round" stroke-linecap="round"/>');
     }
 
@@ -765,16 +769,16 @@
     points.forEach(function (p, i) {
       var isNg = p.judge === "NG";
       svg.push('<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(p.v).toFixed(1) + '" r="' + (isNg ? 4 : 3) +
-        '" fill="' + (isNg ? "#c0392b" : "#0f6cb0") + '" stroke="#fff" stroke-width="1.2"/>');
+        '" fill="' + (isNg ? "#b8453a" : "#2f6e6c") + '" stroke="#fff" stroke-width="1.2"/>');
       if (i % step === 0 || i === points.length - 1) {
         svg.push('<text x="' + X(i).toFixed(1) + '" y="' + (H - PB + 12) +
-          '" font-size="8" fill="#6d7683" text-anchor="middle">' + esc(p.label) + '</text>');
+          '" font-size="8" fill="#8a8071" text-anchor="middle">' + esc(p.label) + '</text>');
       }
     });
 
-    svg.push('<text x="' + PL + '" y="' + (H - 4) + '" font-size="7.5" fill="#9aa3ae">일자 (' +
+    svg.push('<text x="' + PL + '" y="' + (H - 4) + '" font-size="7.5" fill="#b3a896">일자 (' +
       parseInt(ym.slice(5, 7), 10) + '월)</text>');
-    svg.push('<text x="' + (PL - 5) + '" y="' + (PT - 5) + '" font-size="7.5" fill="#9aa3ae" text-anchor="end">' + UNIT + '</text>');
+    svg.push('<text x="' + (PL - 5) + '" y="' + (PT - 5) + '" font-size="7.5" fill="#b3a896" text-anchor="end">' + UNIT + '</text>');
     svg.push("</svg>");
     return svg.join("");
   }
@@ -828,10 +832,10 @@
           (s.retired ? ' · 폐기일 ' + esc(s.retiredAt) : '') + '</div>' +
         buildChart(s, points, chartTitle1, chartTitle2) +
         '<div class="ch-legend">' +
-          '<span><i style="background:#0f6cb0;"></i>누설값</span>' +
-          '<span><i style="background:#c0392b;"></i>상·하한</span>' +
-          '<span><i style="background:#6d7683;"></i>고유 지정값</span>' +
-          '<span><i style="background:#eaf4ee;height:8px;"></i>합격 범위</span>' +
+          '<span><i style="background:#2f6e6c;"></i>누설값</span>' +
+          '<span><i style="background:#b8453a;"></i>상·하한</span>' +
+          '<span><i style="background:#8a8071;"></i>고유 지정값</span>' +
+          '<span><i style="background:#e3eedc;height:8px;"></i>합격 범위</span>' +
           '<span style="width:100%;">가로축 = 일자 (숫자 뒤 &ldquo;야&rdquo; = 야간 교대) · 빨간 점 = 스펙 이탈</span>' +
         '</div>';
       body.appendChild(card);
