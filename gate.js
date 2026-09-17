@@ -36,6 +36,14 @@
   var KEY = "leak_trend_gate_ok_v1";
   var PASS_HASH = "6712da30aaaa05bee4d101db4fd64542e8ac7176769bab88f87e826456678fa9";
 
+  // 연출 속도를 조정할 때는 TAIL_MS부터 만진다.
+  // 등장 시간(duration)을 늘리면 "또렷해지는 시점"만 뒤로 밀릴 뿐, 또렷한 상태로
+  // 멈춰 있는 시간은 그대로라 "너무 빠르다"는 체감이 안 바뀐다.
+  // (QR 정보관리 시스템 `인트로_암호게이트_구현상세.md` §3.4의 교훈)
+  var TAIL_MS = 900;      // 애니메이션이 다 끝난 뒤 화면이 그대로 멈춰 있는 시간
+  var FADE_MS = 700;      // 페이드아웃 길이
+  var TIMEOUT_MS = 6000;  // animationend가 안 올 때(백그라운드 탭 등) 안전 종료
+
   function isUnlocked() {
     try {
       return localStorage.getItem(KEY) === "1";
@@ -68,10 +76,10 @@
   var style = document.createElement("style");
   style.textContent =
     "#dnk-gate{position:fixed;inset:0;background:#1b4a49;display:flex;align-items:center;justify-content:center;overflow:hidden;z-index:99999;font-family:-apple-system,BlinkMacSystemFont,'Malgun Gothic','Apple SD Gothic Neo',sans-serif;visibility:visible;}" +
-    "#dnk-gate .bg-grid{position:absolute;inset:0;background-image:linear-gradient(#2c5f5d 1px,transparent 1px),linear-gradient(90deg,#2c5f5d 1px,transparent 1px);background-size:28px 28px;opacity:0;animation:dnkGridIn .5s ease .1s forwards;}" +
-    "#dnk-gate .bg-scan{position:absolute;left:0;right:0;top:-18%;height:30%;background:linear-gradient(180deg,rgba(159,196,192,0),rgba(159,196,192,.28),rgba(159,196,192,0));animation:dnkScan 1.1s cubic-bezier(.4,0,.2,1) .3s forwards;}" +
+    "#dnk-gate .bg-grid{position:absolute;inset:0;background-image:linear-gradient(#2c5f5d 1px,transparent 1px),linear-gradient(90deg,#2c5f5d 1px,transparent 1px);background-size:28px 28px;opacity:0;animation:dnkGridIn .6s ease .1s forwards;}" +
+    "#dnk-gate .bg-scan{position:absolute;left:0;right:0;top:-18%;height:30%;background:linear-gradient(180deg,rgba(159,196,192,0),rgba(159,196,192,.28),rgba(159,196,192,0));animation:dnkScan 1.3s cubic-bezier(.4,0,.2,1) .3s forwards;}" +
     "#dnk-gate .bg-line{position:absolute;left:8%;right:8%;top:38%;height:24%;}" +
-    ".dnk-gate-card{position:relative;z-index:2;width:100%;max-width:300px;padding:0 24px;text-align:center;opacity:0;transform:translateY(8px);animation:dnkCardIn .55s ease .95s forwards;}" +
+    ".dnk-gate-card{position:relative;z-index:2;width:100%;max-width:300px;padding:0 24px;text-align:center;opacity:0;transform:translateY(8px);animation:dnkCardIn .7s ease 1.1s forwards;}" +
     ".dnk-gate-brand{color:#9fc4c0;font-size:11px;letter-spacing:.06em;margin-bottom:10px;}" +
     ".dnk-gate-title{color:#fff;font-size:17px;font-weight:800;margin-bottom:6px;}" +
     ".dnk-gate-sub{color:#9fc4c0;font-size:12px;line-height:1.5;margin-bottom:18px;}" +
@@ -80,7 +88,7 @@
     ".dnk-gate-err{color:#e8a99e;font-size:12px;min-height:16px;margin-top:8px;}" +
     ".dnk-gate-btn{margin-top:6px;width:100%;padding:12px;border:none;border-radius:8px;background:#2f6e6c;color:#fff;font-size:14px;font-weight:700;cursor:pointer;}" +
     ".dnk-gate-btn:active{opacity:.85;}" +
-    "#dnk-gate.dnk-gate-out{animation:dnkGateOut .4s ease forwards;}" +
+    "#dnk-gate.dnk-gate-out{animation:dnkGateOut " + (FADE_MS / 1000) + "s ease forwards;}" +
     "@keyframes dnkGridIn{to{opacity:1;}}" +
     "@keyframes dnkScan{0%{top:-18%;}100%{top:100%;}}" +
     "@keyframes dnkCardIn{to{opacity:1;transform:none;}}" +
@@ -91,26 +99,31 @@
 
   var wrap = document.createElement("div");
   wrap.id = "dnk-gate";
+  if (!already) {
+    wrap.setAttribute("role", "dialog");
+    wrap.setAttribute("aria-modal", "true");
+    wrap.setAttribute("aria-labelledby", "dnk-gate-title");
+  }
   wrap.innerHTML =
     '<div class="bg-grid"></div>' +
     '<div class="bg-scan"></div>' +
     '<svg class="bg-line" viewBox="0 0 200 60" preserveAspectRatio="none">' +
       '<path d="M0,46 L34,30 L68,38 L102,14 L136,24 L200,6" fill="none" stroke="#9fc4c0" stroke-width="2" ' +
         'stroke-linecap="round" stroke-linejoin="round" pathLength="1" ' +
-        'style="stroke-dasharray:1;stroke-dashoffset:1;animation:dnkLineDraw .85s ease .45s forwards;"/>' +
+        'style="stroke-dasharray:1;stroke-dashoffset:1;animation:dnkLineDraw 1s ease .5s forwards;"/>' +
     '</svg>' +
     (already
       ? '<div class="dnk-gate-card">' +
         '<div class="dnk-gate-brand">DnK MOBILITY · 후공정 생산기술팀</div>' +
-        '<div class="dnk-gate-title">e-AWD 모터 하우징 누설값 관리 시스템</div>' +
+        '<div class="dnk-gate-title">e-AWD 모터 하우징<br>누설값 관리 시스템</div>' +
         "</div>"
       : '<div class="dnk-gate-card">' +
         '<div class="dnk-gate-brand">DnK MOBILITY · 후공정 생산기술팀</div>' +
-        '<div class="dnk-gate-title">사내 전용 페이지입니다</div>' +
+        '<div class="dnk-gate-title" id="dnk-gate-title">사내 전용 페이지입니다</div>' +
         '<div class="dnk-gate-sub">이 기기에서 처음 한 번만 확인합니다.<br>다음부터는 QR을 찍으면 바로 입력 화면이 뜹니다.</div>' +
-        '<input id="dnk-gate-pw" class="dnk-gate-input" type="password" placeholder="접속 암호" autocomplete="off" />' +
-        '<div id="dnk-gate-err" class="dnk-gate-err"></div>' +
-        '<button id="dnk-gate-go" class="dnk-gate-btn">확인</button>' +
+        '<input id="dnk-gate-pw" class="dnk-gate-input" type="password" placeholder="접속 암호" aria-label="접속 암호" autocomplete="off" />' +
+        '<div id="dnk-gate-err" class="dnk-gate-err" role="alert"></div>' +
+        '<button id="dnk-gate-go" class="dnk-gate-btn" type="button">확인</button>' +
         "</div>");
   document.documentElement.appendChild(wrap);
 
@@ -130,10 +143,39 @@
 
   // 이미 통과한 폰: 연출만 보여주고, 암호는 다시 묻지 않은 채 끝나면 화면으로 넘어간다.
   if (already) {
-    setTimeout(function () {
+    var closed = false;
+    function finish() {
+      if (closed) return;
+      closed = true;
       wrap.classList.add("dnk-gate-out");
-      setTimeout(reveal, 400);
-    }, 1600);
+      setTimeout(reveal, FADE_MS + 60);
+    }
+
+    // 고정 타이머로 "몇 초 뒤 종료"를 재지 않는다. 최초 로드 때 애니메이션 시작이
+    // 수백 ms 밀리면 마지막 동작이 잘리고, delay·duration을 나중에 조정하면 어느
+    // 것이 가장 늦게 끝나는지가 바뀌기 때문. 그래서 끝난 개수를 센다.
+    var animated = wrap.querySelectorAll(".bg-grid,.bg-scan,.bg-line path,.dnk-gate-card");
+    var pending = animated.length;
+
+    // 동작 줄이기 설정이면 CSS가 애니메이션을 꺼버려 animationend가 아예 오지 않는다.
+    // (화면을 건너뛰라는 뜻이 아니라, 끝을 셀 수 없으니 시간으로 재야 한다는 뜻 —
+    //  연출 화면 자체는 이 경우에도 항상 보여준다.)
+    var reduceMotion = false;
+    try {
+      reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    } catch (e) {}
+
+    if (reduceMotion || !pending) {
+      setTimeout(finish, TAIL_MS + 600);
+    } else {
+      var safety = setTimeout(finish, TIMEOUT_MS);
+      wrap.addEventListener("animationend", function () {
+        pending -= 1;
+        if (pending > 0) return;
+        clearTimeout(safety);
+        setTimeout(finish, TAIL_MS);
+      });
+    }
     return;
   }
 
@@ -158,7 +200,10 @@
   input.addEventListener("keydown", function (e) {
     if (e.key === "Enter") tryUnlock();
   });
+
+  // 카드가 실제로 떠오른 뒤에 포커스를 준다. 연출 중에 미리 포커스하면 폰에서
+  // 키보드가 먼저 올라와 연출을 가린다 (카드는 1.1s 지연 + 0.7s 동안 등장).
   setTimeout(function () {
     input.focus();
-  }, 50);
+  }, 1850);
 })();
