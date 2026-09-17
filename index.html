@@ -220,6 +220,54 @@
   }
   .toast.show{opacity:1;}
 
+  /* 도움말 위젯 — 우측 하단 고정, 스크롤해도 같은 자리에 머문다(position:fixed) */
+  #helpWrap{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:300;}
+  #helpFab{
+    width:52px;height:52px;border-radius:50%;border:none;background:var(--navy);color:#fff;
+    font-size:22px;font-weight:800;cursor:pointer;box-shadow:0 4px 14px rgba(27,74,73,.35);
+    display:flex;align-items:center;justify-content:center;
+  }
+  #helpFab:active{opacity:.85;}
+  #helpPanel{
+    position:absolute;right:0;bottom:62px;width:min(340px,calc(100vw - 32px));
+    max-height:min(70vh,520px);background:var(--white);border-radius:12px;
+    box-shadow:0 8px 28px rgba(43,38,33,.22);border:1px solid var(--gray-300);
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+  #helpPanel[hidden]{display:none;}
+  .help-head{
+    display:flex;align-items:center;gap:8px;padding:12px 14px;background:var(--navy);color:#fff;
+    font-size:13px;font-weight:800;
+  }
+  .help-head span{flex:1;}
+  .help-head button{
+    border:none;background:rgba(255,255,255,.16);color:#fff;width:26px;height:26px;
+    border-radius:6px;font-size:13px;line-height:1;cursor:pointer;flex-shrink:0;
+  }
+  .help-search-row{padding:10px 12px;border-bottom:1px solid var(--gray-200);}
+  .help-search-row input{
+    width:100%;box-sizing:border-box;font-family:inherit;font-size:14px;
+    padding:8px 10px;border:1px solid var(--gray-300);border-radius:7px;background:var(--gray-100);
+  }
+  .help-list{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px 0;}
+  .help-empty{padding:20px 14px;text-align:center;color:var(--gray-500);font-size:12.5px;}
+  .help-item{border-bottom:1px solid var(--gray-100);}
+  .help-q{
+    width:100%;text-align:left;border:none;background:none;cursor:pointer;
+    padding:10px 14px;font-family:inherit;font-size:12.5px;font-weight:700;color:var(--gray-900);
+    display:flex;align-items:center;gap:6px;
+  }
+  .help-q .tag{
+    flex-shrink:0;font-size:9.5px;font-weight:800;padding:2px 6px;border-radius:4px;
+    background:var(--gray-200);color:var(--gray-700);
+  }
+  .help-q .tag.admin{background:var(--warn-bg);color:var(--warn-text);}
+  .help-q .chev{margin-left:auto;color:var(--gray-400);flex-shrink:0;}
+  .help-a{padding:0 14px 12px 14px;font-size:12px;color:var(--gray-700);line-height:1.55;}
+  .help-a .goto{
+    display:inline-block;margin-top:8px;border:none;background:var(--accent);color:#fff;
+    font-family:inherit;font-size:11.5px;font-weight:700;padding:7px 12px;border-radius:6px;cursor:pointer;
+  }
   @media (prefers-reduced-motion:reduce){ .toast,.ch-tip{transition:none;} }
 </style>
 </head>
@@ -358,6 +406,22 @@
 </footer>
 
 <div class="toast" id="toast"></div>
+
+<div id="helpWrap">
+  <button type="button" id="helpFab" aria-label="도움말 열기" aria-expanded="false">
+    <span id="helpFabIcon">?</span>
+  </button>
+  <div id="helpPanel" hidden>
+    <div class="help-head">
+      <span>무엇을 도와드릴까요?</span>
+      <button type="button" id="helpClose" aria-label="닫기">✕</button>
+    </div>
+    <div class="help-search-row">
+      <input type="search" id="helpSearch" placeholder="궁금한 내용을 검색해보세요" autocomplete="off">
+    </div>
+    <div id="helpList" class="help-list"></div>
+  </div>
+</div>
 
 <script>
 (function () {
@@ -1923,6 +1987,140 @@
   }
 
   /* =========================================================================
+     도움말 위젯 (우측 하단 고정 · FAQ 검색 + 해당 위치로 이동)
+     ------------------------------------------------------------------------
+     자연어로 뭐든 답하는 AI 챗봇은 아니다 — 미리 써 둔 질문·답변 중에서
+     검색어와 겹치는 것만 보여준다. 대신 답이 항상 정확하고(틀린 답을 지어내지
+     않음) 무료다. "가는 경로까지 인도"는 goto에 섹션 id를 적어 두면 그 항목을
+     펼치고 스크롤해 주는 방식으로 구현했다.
+     새 질문을 추가하려면 이 배열에 { q, keywords, a, goto? } 한 줄만 더 적으면
+     된다 — 코드의 다른 부분은 손댈 필요 없다.
+     ========================================================================= */
+  var FAQ = [
+    { q: "누설값은 어떻게 입력하나요?", keywords: "입력 저장 측정값 기록 시업전 점검",
+      a: "①시업 전 점검 입력에서 일자·교대·확인자를 채우고, 마스터 샘플별 누설값을 입력한 뒤 [저장]을 누르세요. 같은 일자·교대로 또 저장하면 기존 기록을 덮어씁니다(그때는 확인창이 한 번 더 뜹니다).",
+      goto: "secInput" },
+    { q: "NG로 뜨면 어떻게 하나요?", keywords: "NG 불량 판정 스펙 이탈",
+      a: "입력한 값이 스펙(상한·하한)을 벗어났다는 뜻입니다. 먼저 값을 잘못 입력하지 않았는지 확인하고, 맞다면 재측정해 보세요. 계속 NG가 나오면 관리자에게 알려주세요.",
+      goto: "secInput" },
+    { q: "마스터 샘플이 없다고 나와요", keywords: "샘플 없음 등록 추가",
+      a: "④마스터 샘플 · 스펙 관리에서 [+ 마스터 샘플 추가]로 등록하세요. 등록 후 지정값·스펙(상한·하한)도 함께 입력해 두면 매일 누설값만 적으면 됩니다.",
+      goto: "secSpec" },
+    { q: "마스터 샘플을 바꿔야 해요", keywords: "샘플 교체 폐기 노후 중지",
+      a: "④에서 해당 샘플의 [폐기(교체)] 버튼을 누르고 중지 시점을 입력하세요. 지난 기록·그래프는 그대로 남고, [+ 마스터 샘플 추가]로 새 샘플을 등록하면 그때부터 새 샘플로 기록이 쌓입니다. 실수로 폐기했다면 [사용 재개]로 되돌릴 수 있습니다.",
+      goto: "secSpec" },
+    { q: "예전 기록·그래프는 어디서 보나요?", keywords: "지난 기록 예전 데이터 과거 그래프 이력",
+      a: "②그래프 위의 ‹ › 로 달을 옮기면 그 달 기록을 볼 수 있고, ③월별 기록에서는 표로 볼 수 있습니다. 한 샘플의 전체 기간을 한 번에 보려면 ④에서 해당 샘플의 [전체 이력 보기]를 누르세요.",
+      goto: "secChart" },
+    { q: "추이 이상 신호는 뭔가요?", keywords: "이상신호 경고상자 노란상자 추이 트렌드",
+      a: "스펙 안에 있어도, 이 샘플이 평소 움직이던 패턴과 통계적으로 다르면 그래프 아래 노란 상자로 알려주는 기능입니다. 아직 불량은 아니어도 미리 확인해 보라는 뜻이고, 흔히 보는 원인 목록도 함께 나옵니다.",
+      goto: "secChart" },
+    { q: "다른 사람이 입력한 값이 안 보여요", keywords: "동기화 연동 안됨 새로고침",
+      a: "화면 위쪽 띠가 🟢 구글시트 연동됨이 맞는지 확인하고 [새로고침]을 눌러보세요. 🟡 미전송이면 이 폰에서 아직 서버로 못 보낸 것이니, 통신이 되는 곳에서 새로고침하면 자동으로 전송됩니다." },
+    { q: "인터넷이 안 될 때도 입력할 수 있나요?", keywords: "오프라인 인터넷 전파 안됨",
+      a: "네. 값은 항상 이 폰에 먼저 저장되고, 통신이 되면 자동으로 서버에 전송됩니다. 전파가 안 터져도 입력은 그대로 됩니다." },
+    { q: "CSV나 백업 파일은 어떻게 받나요?", keywords: "csv 엑셀 다운로드 백업 내보내기 관리자",
+      a: "⑤데이터 · 연동 설정에서 [CSV 내보내기](엑셀용) 또는 [전체 백업 파일](이 폰의 전체 기록, 나중에 복원 가능)을 받을 수 있습니다.",
+      goto: "secData", admin: true },
+    { q: "구글시트 연동은 어떻게 설정하나요?", keywords: "구글시트 연동 설정 처음 apps script",
+      a: "⑤데이터 · 연동 설정에서 안내를 볼 수 있고, 자세한 절차는 저장소의 구글시트_연동_설정방법.md 문서를 참고하세요. 최초 설정은 구글 계정 소유자가 한 번만 하면 됩니다.",
+      goto: "secData", admin: true },
+    { q: "접속 비밀번호를 바꾸고 싶어요", keywords: "비밀번호 암호 변경 관리자",
+      a: "화면에서는 바꿀 수 없고, gate.js 파일을 코드에서 직접 수정해야 합니다. PROJECT_OVERVIEW.md에 방법이 적혀 있으니 담당 개발자나 후공정 생산기술팀에 문의하세요.",
+      admin: true },
+    { q: "상단 설비 사양 카드를 수정하고 싶어요", keywords: "설비사양 상단카드 수정 관리자",
+      a: "화면에서는 바꿀 수 없고, index.html 코드 안 EQ 부분을 수정해야 합니다. PROJECT_OVERVIEW.md §3-2에 방법이 적혀 있습니다.",
+      admin: true },
+    { q: "QR 코드를 다시 만들고 싶어요", keywords: "qr코드 재생성 관리자",
+      a: "저장소의 tools/make_qr.py 스크립트를 실행하면 6개 채널의 QR 코드가 다시 만들어집니다. 주소가 바뀌었을 때만 다시 만들면 됩니다.",
+      admin: true },
+    { q: "담당자가 바뀌면 어떻게 하나요?", keywords: "담당자 교체 퇴사 인수인계 관리자",
+      a: "구글 계정은 새로 만들 필요 없이 복구 이메일만 새 담당자 것으로 바꾸면 됩니다. GitHub 조직 계정도 마찬가지로 개인에게 묶여 있지 않습니다. 자세한 내용은 개선이력.md를 참고하세요.",
+      admin: true }
+  ];
+
+  function searchFaq(query) {
+    var q = query.trim().toLowerCase();
+    if (!q) return FAQ;
+    return FAQ.filter(function (f) {
+      return (f.q + " " + f.keywords + " " + f.a).toLowerCase().indexOf(q) >= 0;
+    });
+  }
+
+  function renderHelpList(query) {
+    var list = $("helpList");
+    var results = searchFaq(query || "");
+    if (!results.length) {
+      list.innerHTML = '<div class="help-empty">일치하는 답을 못 찾았습니다.<br>문의는 후공정 생산기술팀으로 부탁드립니다.</div>';
+      return;
+    }
+    list.innerHTML = results.map(function (f, i) {
+      return '<div class="help-item">' +
+        '<button type="button" class="help-q" data-i="' + i + '">' +
+          (f.admin ? '<span class="tag admin">관리자</span>' : '<span class="tag">작업자</span>') +
+          '<span>' + esc(f.q) + '</span>' +
+          '<span class="chev">▾</span>' +
+        '</button>' +
+        '<div class="help-a" id="helpA' + i + '" hidden>' +
+          esc(f.a) +
+          (f.goto ? '<br><button type="button" class="goto" data-goto="' + esc(f.goto) + '">여기로 이동</button>' : "") +
+        "</div>" +
+        "</div>";
+    }).join("");
+
+    results.forEach(function (f, i) {
+      var btn = list.querySelector('.help-q[data-i="' + i + '"]');
+      var ans = $("helpA" + i);
+      btn.addEventListener("click", function () {
+        var open = !ans.hidden;
+        // 아코디언처럼 하나만 열리게 — 검색 결과가 길어도 스크롤이 덜 지저분함
+        list.querySelectorAll(".help-a").forEach(function (a) { a.hidden = true; });
+        ans.hidden = open;
+      });
+    });
+    list.querySelectorAll("[data-goto]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-goto");
+        var sec = $(id);
+        if (!sec) return;
+        sec.open = true;
+        closeHelp();
+        setTimeout(function () {
+          sec.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 50);
+      });
+    });
+  }
+
+  function openHelp() {
+    $("helpPanel").hidden = false;
+    $("helpFab").setAttribute("aria-expanded", "true");
+    $("helpFabIcon").textContent = "✕";
+    $("helpSearch").value = "";
+    renderHelpList("");
+    setTimeout(function () { $("helpSearch").focus(); }, 50);
+  }
+
+  function closeHelp() {
+    $("helpPanel").hidden = true;
+    $("helpFab").setAttribute("aria-expanded", "false");
+    $("helpFabIcon").textContent = "?";
+  }
+
+  function initHelp() {
+    $("helpFab").addEventListener("click", function () {
+      if ($("helpPanel").hidden) openHelp(); else closeHelp();
+    });
+    $("helpClose").addEventListener("click", closeHelp);
+    $("helpSearch").addEventListener("input", function () {
+      renderHelpList($("helpSearch").value);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !$("helpPanel").hidden) closeHelp();
+    });
+  }
+
+  /* =========================================================================
      교대 선택
      ========================================================================= */
   function setShift(v) {
@@ -1985,6 +2183,8 @@
       if (e.target.files && e.target.files[0]) importBackup(e.target.files[0]);
       e.target.value = "";
     });
+
+    initHelp();
 
     renderAll();
     syncNow("auto");
