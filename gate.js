@@ -14,10 +14,17 @@
 
   2026-09-18: 배경 연출 추가 (계측 그리드 스캔 + 꺾은선 그리기 결합). 이 앱이 "누설값 트렌드"
   앱이라는 정체성을 게이트 화면에서부터 보여주려고 넣었다 — 격자가 옅게 깔리고, 스캔 라인이
-  한 번 훑고 지나가면서 그 뒤로 꺾은선 그래프가 그려지고, 마지막에 암호 카드가 뜬다.
-  기기당 1회만 보이므로(요청 시 잠깐씩만 재생) 길게 잡아도 방해가 안 된다 — 약 1.9초.
+  한 번 훑고 지나가면서 그 뒤로 꺾은선 그래프가 그려지고, 마지막에 암호 카드가 뜬다. 약 1.9초.
   색상은 QR 정보관리 시스템과 공유하던 네이비+시안 대신 이 프로젝트만의 팔레트(따뜻한 크림 +
   다크 틸)로 바꿨다 — styles.css :root 및 index.html의 하드코딩 hex와 같은 값.
+
+  2026-09-19: 처음에는 "기기당 1회만" 재생했는데(이미 통과한 폰은 애니메이션 없이 즉시 화면이
+  떴다), QR을 찍을 때마다 이 연출을 보고 싶다는 요청으로 항상 재생하도록 바꿨다. 다만 암호까지
+  다시 묻지는 않는다 — 이미 통과한 폰은 같은 연출이 재생되는 동안 입력칸 없는 환영 카드만 보여
+  주고, 끝나면 화면이 페이드아웃되며 바로 앱으로 넘어간다(암호 카드가 뜨는 대신). 처음 통과하는
+  폰만 원래대로 연출 뒤에 암호 카드가 뜬다. prefers-reduced-motion 환경에서는 이미 통과한 폰은
+  기다림 없이 즉시 넘어간다 — 모션을 줄이고 싶다는 설정인데 연출을 못 보여줄 거면서 기다리게만
+  하는 건 앞뒤가 안 맞기 때문이다.
 */
 (function () {
   "use strict";
@@ -52,7 +59,14 @@
 
   document.documentElement.style.visibility = "hidden";
 
-  if (isUnlocked()) {
+  var already = isUnlocked();
+  var reduceMotion = false;
+  try {
+    reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch (e) {}
+
+  // 이미 통과한 폰인데 모션도 줄이고 싶다면, 연출 없이 원래처럼 즉시 화면을 보여준다.
+  if (already && reduceMotion) {
     document.documentElement.style.visibility = "visible";
     window.dnkGate = { ready: Promise.resolve(true) };
     return;
@@ -73,10 +87,12 @@
     ".dnk-gate-err{color:#e8a99e;font-size:12px;min-height:16px;margin-top:8px;}" +
     ".dnk-gate-btn{margin-top:6px;width:100%;padding:12px;border:none;border-radius:8px;background:#2f6e6c;color:#fff;font-size:14px;font-weight:700;cursor:pointer;}" +
     ".dnk-gate-btn:active{opacity:.85;}" +
+    "#dnk-gate.dnk-gate-out{animation:dnkGateOut .4s ease forwards;}" +
     "@keyframes dnkGridIn{to{opacity:1;}}" +
     "@keyframes dnkScan{0%{top:-18%;}100%{top:100%;}}" +
     "@keyframes dnkCardIn{to{opacity:1;transform:none;}}" +
     "@keyframes dnkLineDraw{to{stroke-dashoffset:0;}}" +
+    "@keyframes dnkGateOut{to{opacity:0;}}" +
     "@media (prefers-reduced-motion:reduce){#dnk-gate .bg-grid,#dnk-gate .bg-scan,#dnk-gate .bg-line path,.dnk-gate-card{animation:none!important;opacity:1!important;transform:none!important;}}";
   document.documentElement.appendChild(style);
 
@@ -90,19 +106,20 @@
         'stroke-linecap="round" stroke-linejoin="round" pathLength="1" ' +
         'style="stroke-dasharray:1;stroke-dashoffset:1;animation:dnkLineDraw .85s ease .45s forwards;"/>' +
     '</svg>' +
-    '<div class="dnk-gate-card">' +
-    '<div class="dnk-gate-brand">DnK MOBILITY · 후공정 생산기술팀</div>' +
-    '<div class="dnk-gate-title">사내 전용 페이지입니다</div>' +
-    '<div class="dnk-gate-sub">이 기기에서 처음 한 번만 확인합니다.<br>다음부터는 QR을 찍으면 바로 입력 화면이 뜹니다.</div>' +
-    '<input id="dnk-gate-pw" class="dnk-gate-input" type="password" placeholder="접속 암호" autocomplete="off" />' +
-    '<div id="dnk-gate-err" class="dnk-gate-err"></div>' +
-    '<button id="dnk-gate-go" class="dnk-gate-btn">확인</button>' +
-    "</div>";
+    (already
+      ? '<div class="dnk-gate-card">' +
+        '<div class="dnk-gate-brand">DnK MOBILITY · 후공정 생산기술팀</div>' +
+        '<div class="dnk-gate-title">e-AWD 모터 하우징 누설값 관리 시스템</div>' +
+        "</div>"
+      : '<div class="dnk-gate-card">' +
+        '<div class="dnk-gate-brand">DnK MOBILITY · 후공정 생산기술팀</div>' +
+        '<div class="dnk-gate-title">사내 전용 페이지입니다</div>' +
+        '<div class="dnk-gate-sub">이 기기에서 처음 한 번만 확인합니다.<br>다음부터는 QR을 찍으면 바로 입력 화면이 뜹니다.</div>' +
+        '<input id="dnk-gate-pw" class="dnk-gate-input" type="password" placeholder="접속 암호" autocomplete="off" />' +
+        '<div id="dnk-gate-err" class="dnk-gate-err"></div>' +
+        '<button id="dnk-gate-go" class="dnk-gate-btn">확인</button>' +
+        "</div>");
   document.documentElement.appendChild(wrap);
-
-  var input = wrap.querySelector("#dnk-gate-pw");
-  var err = wrap.querySelector("#dnk-gate-err");
-  var btn = wrap.querySelector("#dnk-gate-go");
 
   var resolveReady;
   window.dnkGate = {
@@ -111,14 +128,32 @@
     }),
   };
 
+  function reveal() {
+    wrap.remove();
+    style.remove();
+    document.documentElement.style.visibility = "visible";
+    resolveReady(true);
+  }
+
+  // 이미 통과한 폰: 연출만 보여주고, 암호는 다시 묻지 않은 채 끝나면 화면으로 넘어간다.
+  // (reduceMotion이면서 already인 경우는 이 지점보다 앞에서 이미 걸러져 반환됐다.)
+  if (already) {
+    setTimeout(function () {
+      wrap.classList.add("dnk-gate-out");
+      setTimeout(reveal, 400);
+    }, 1600);
+    return;
+  }
+
+  var input = wrap.querySelector("#dnk-gate-pw");
+  var err = wrap.querySelector("#dnk-gate-err");
+  var btn = wrap.querySelector("#dnk-gate-go");
+
   function tryUnlock() {
     sha256Hex(input.value).then(function (hex) {
       if (hex === PASS_HASH) {
         markUnlocked();
-        wrap.remove();
-        style.remove();
-        document.documentElement.style.visibility = "visible";
-        resolveReady(true);
+        reveal();
       } else {
         err.textContent = "암호가 올바르지 않습니다";
         input.value = "";
