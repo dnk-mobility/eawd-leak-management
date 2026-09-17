@@ -188,8 +188,9 @@
   .trend-head{font-size:12px;font-weight:800;color:var(--warn-text);margin-bottom:6px;}
   .trend-item + .trend-item{margin-top:8px;padding-top:8px;border-top:1px dashed #e3c9a0;}
   .trend-title{font-size:12px;font-weight:700;color:var(--gray-900);}
-  .trend-detail{font-size:11px;color:var(--gray-700);margin-top:1px;line-height:1.45;}
-  .trend-causes{font-size:10.5px;color:var(--gray-500);margin-top:4px;}
+  .trend-plain{font-size:12.5px;color:var(--gray-900);margin-top:3px;line-height:1.6;}
+  .trend-detail{font-size:10px;color:var(--gray-500);margin-top:5px;line-height:1.4;}
+  .trend-causes{font-size:10.5px;color:var(--gray-500);margin-top:6px;}
   .trend-causes .k{font-weight:700;color:var(--gray-700);}
   .trend-causes ul{margin:3px 0 0;padding-left:16px;}
   .trend-causes li{margin-top:2px;}
@@ -1064,8 +1065,12 @@
         findings.push({
           key: "trend",
           title: (dir > 0 ? "연속 상승 추세" : "연속 하강 추세") + " · " + run + "회 연속 진행 중",
+          plain: "측정할 때마다 누설값이 " + run + "번 연속으로 " + (dir > 0 ? "조금씩 계속 커지고" : "조금씩 계속 작아지고") +
+            " 있습니다. 오르내림 없이 " + (dir > 0 ? "한쪽으로만 계속 올라가는" : "한쪽으로만 계속 내려가는") +
+            " 건 우연히 그런 것치고는 드문 일이라, 설비나 샘플에 뭔가 서서히 " +
+            (dir > 0 ? "나빠지고 있다는" : "달라지고 있다는") + " 신호일 수 있습니다.",
           detail: points[s].date + " " + points[s].shift + " ~ " + points[n - 1].date + " " + points[n - 1].shift +
-            " 동안 값이 " + run + "회 연속으로 " + (dir > 0 ? "이전 값보다 계속 커졌습니다." : "이전 값보다 계속 작아졌습니다.")
+            " 동안 " + run + "회 연속 " + (dir > 0 ? "직전 값보다 컸음" : "직전 값보다 작았음")
         });
       }
     })();
@@ -1083,9 +1088,11 @@
         findings.push({
           key: "shift",
           title: "평균 한쪽 쏠림 · " + run + "회 연속 " + (side > 0 ? "평균보다 높음" : "평균보다 낮음"),
-          detail: points[s].date + " ~ " + points[n - 1].date + " 사이 " + run + "회 전부 이 샘플의 평소 평균(" +
-            fmt(Math.round(m * 1000) / 1000) + ")보다 " + (side > 0 ? "높았습니다." : "낮았습니다.") +
-            " 측정 오차 범위를 벗어난 지속적인 쏠림입니다."
+          plain: "최근 " + run + "번은 잴 때마다 거의 매번 평소보다 " + (side > 0 ? "높게" : "낮게") + " 나오고 있습니다. " +
+            "하루 이틀이면 그냥 그런 날일 수 있지만, 이렇게 오래 한쪽으로만 쏠리는 건 며칠 사이에 뭔가가 " +
+            "실제로 바뀌었다는 뜻일 가능성이 큽니다 — 예를 들어 마스터 샘플을 새로 바꿨거나, 설비 쪽 뭔가가 달라졌을 수 있습니다.",
+          detail: points[s].date + " ~ " + points[n - 1].date + " 사이 " + run + "회 전부 평소 평균(" +
+            fmt(Math.round(m * 1000) / 1000) + " " + UNIT + ")보다 " + (side > 0 ? "높았음" : "낮았음")
         });
       }
     })();
@@ -1108,16 +1115,22 @@
           findings.push({
             key: "nearLimit",
             title: "경고 구간 근접 · 평소보다 크게 높음",
+            plain: "스펙(상한·하한) 판정으로는 아직 문제없는 값들입니다. 다만 최근 3번 중 " + hi.length +
+              "번이, 이 샘플이 평소 흔들리던 폭을 벗어날 만큼 눈에 띄게 높게 나왔습니다. " +
+              "지금 당장 불량은 아니지만, 평소보다 확실히 불안정해진 상태라 한번 확인해 볼 필요가 있습니다.",
             detail: "최근 3회 중 " + hi.length + "회(" + hi.join(", ") + ")가 그 이전까지의 평소 변동 범위(평균 " +
-              fmt(Math.round(bm * 1000) / 1000) + " ±2σ) 위쪽 경고선을 넘었습니다. 스펙 상한까지는 여유가 있어도, 이 샘플 자체의 평소 흔들림보다 큰 움직임입니다."
+              fmt(Math.round(bm * 1000) / 1000) + " " + UNIT + " ± 평소 흔들림폭의 2배) 위쪽을 벗어났음"
           });
         }
         if (lo.length >= 2) {
           findings.push({
             key: "nearLimit",
             title: "경고 구간 근접 · 평소보다 크게 낮음",
+            plain: "스펙(상한·하한) 판정으로는 아직 문제없는 값들입니다. 다만 최근 3번 중 " + lo.length +
+              "번이, 이 샘플이 평소 흔들리던 폭을 벗어날 만큼 눈에 띄게 낮게 나왔습니다. " +
+              "지금 당장 불량은 아니지만, 평소보다 확실히 불안정해진 상태라 한번 확인해 볼 필요가 있습니다.",
             detail: "최근 3회 중 " + lo.length + "회(" + lo.join(", ") + ")가 그 이전까지의 평소 변동 범위(평균 " +
-              fmt(Math.round(bm * 1000) / 1000) + " ±2σ) 아래쪽 경고선을 넘었습니다."
+              fmt(Math.round(bm * 1000) / 1000) + " " + UNIT + " ± 평소 흔들림폭의 2배) 아래쪽을 벗어났음"
           });
         }
       }
@@ -1128,11 +1141,19 @@
       var recent = vals.slice(-5), base = vals.slice(0, -5);
       var sdRecent = stdev(recent), sdBase = stdev(base);
       if (sdBase > TREND_EPS && sdRecent > sdBase * 1.8) {
+        var rawRatio = sdRecent / sdBase;
+        // 이전 구간이 우연히 거의 완벽하게 평평했으면(값이 거의 안 흔들렸으면) 배율이
+        // 비현실적으로 커진다(예: 70배) — 계산은 맞지만 그대로 보여주면 오히려
+        // 신뢰가 떨어지므로, 큰 배율은 "5배 이상"처럼 뭉뚱그려 표현한다.
+        var ratioText = rawRatio >= 5 ? "5배 이상으로" : "약 " + fmt(Math.round(rawRatio * 10) / 10) + "배로";
         findings.push({
           key: "volatility",
           title: "최근 변동폭 급증",
-          detail: "최근 5회 값의 들쭉날쭉한 정도(표준편차 " + fmt(Math.round(sdRecent * 1000) / 1000) +
-            ")가 그 이전 구간(" + fmt(Math.round(sdBase * 1000) / 1000) + ")보다 뚜렷하게 커졌습니다."
+          plain: "최근 5번의 측정값이 예전보다 훨씬 들쭉날쭉합니다(같은 사람·같은 방법으로 재도 오르락내리락하는 " +
+            "폭이 이전보다 " + ratioText + " 커졌습니다). 어느 한 방향으로 나빠지는 게 아니라 " +
+            "값 자체가 예측하기 어려워진 상태라, 공정이나 측정 과정이 불안정해졌다는 신호일 수 있습니다.",
+          detail: "최근 5회 값의 흔들림 정도가 그 이전 구간보다 " + ratioText + " 커졌음(수치로는 " +
+            fmt(Math.round(sdRecent * 1000) / 1000) + " " + UNIT + " vs 이전 " + fmt(Math.round(sdBase * 1000) / 1000) + " " + UNIT + ")"
         });
       }
     }
@@ -1147,7 +1168,8 @@
       var causes = CAUSE_HINTS[f.key] || [];
       return '<div class="trend-item">' +
         '<div class="trend-title">' + esc(f.title) + '</div>' +
-        '<div class="trend-detail">' + esc(f.detail) + '</div>' +
+        '<div class="trend-plain">' + esc(f.plain) + '</div>' +
+        '<div class="trend-detail">근거: ' + esc(f.detail) + '</div>' +
         (causes.length
           ? '<div class="trend-causes"><span class="k">흔히 보는 원인(참고용)</span><ul>' +
             causes.map(function (c) { return "<li>" + esc(c) + "</li>"; }).join("") + "</ul></div>"
