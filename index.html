@@ -180,6 +180,21 @@
     .modal-in{border-radius:12px;}
   }
 
+  /* 추이 이상 신호(SPC 규칙 기반 자동 탐지) */
+  .trend-note{
+    margin:8px 8px 0;padding:10px 12px;border-radius:7px;
+    background:var(--warn-bg);border:1px solid #e3c9a0;
+  }
+  .trend-head{font-size:12px;font-weight:800;color:var(--warn-text);margin-bottom:6px;}
+  .trend-item + .trend-item{margin-top:8px;padding-top:8px;border-top:1px dashed #e3c9a0;}
+  .trend-title{font-size:12px;font-weight:700;color:var(--gray-900);}
+  .trend-detail{font-size:11px;color:var(--gray-700);margin-top:1px;line-height:1.45;}
+  .trend-causes{font-size:10.5px;color:var(--gray-500);margin-top:4px;}
+  .trend-causes .k{font-weight:700;color:var(--gray-700);}
+  .trend-causes ul{margin:3px 0 0;padding-left:16px;}
+  .trend-causes li{margin-top:2px;}
+  .trend-foot{font-size:10px;color:var(--gray-500);line-height:1.5;margin:8px 0 0;padding-top:6px;border-top:1px solid #e3c9a0;}
+
   .empty{
     text-align:center;color:var(--gray-500);font-size:12.5px;
     padding:22px 10px;background:var(--gray-100);border-radius:7px;
@@ -968,6 +983,184 @@
     });
   }
 
+  /* =========================================================================
+     추이 이상 신호 자동 탐지 (통계적 공정관리 · SPC 규칙 기반)
+     ------------------------------------------------------------------------
+     스펙(상·하한) 이탈은 이미 그래프에서 빨간 점으로 표시된다. 여기서 잡는 것은
+     "스펙 안에 있지만 이 샘플의 평소 패턴과는 다른" 움직임이다 — 실제로 스펙을
+     벗어나기 *전에* 미리 알아차리는 것이 목적. 업계에서 널리 쓰는 Nelson
+     Rules(관리도 이상 판정 규칙) 중, 표본이 적어도(6~10개) 의미 있게 판단할 수
+     있는 규칙만 골랐다. 값이 몇 개 없는 달에는 판단하지 않는다(오탐 방지).
+
+     이건 "AI"가 아니라 통계 계산이다 — 어떤 값들이 왜 신호로 잡혔는지 항상
+     설명 가능하고, 결과가 매번 똑같다(같은 데이터를 넣으면 항상 같은 결과).
+     패턴별 "흔한 원인" 목록(CAUSE_HINTS)은 일반적인 리크테스트 품질관리
+     지식으로 만든 초안이다 — 실제 현장 경험에 맞게 문구를 다듬어 쓰는 것을
+     권장한다(개선이력.md 2026-09-19 항목 참고).
+     ========================================================================= */
+  function mean(arr) {
+    return arr.reduce(function (a, b) { return a + b; }, 0) / arr.length;
+  }
+  function stdev(arr, m) {
+    if (arr.length < 2) return 0;
+    var mm = m === undefined ? mean(arr) : m;
+    var sq = arr.reduce(function (a, b) { return a + (b - mm) * (b - mm); }, 0);
+    return Math.sqrt(sq / (arr.length - 1));
+  }
+
+  var CAUSE_HINTS = {
+    trend: [
+      "리크 테스터 자체의 교정 드리프트 — 정기 교정 주기 확인",
+      "마스터 샘플(기준 시편) 자체의 노후화·마모·오링 열화",
+      "측정 지그(고정구) 실링부 마모 또는 이물질 누적",
+      "설비주변온도의 누적 변화 — ③월별 기록의 온도값과 대조",
+      "압축공기 공급압이 서서히 변동"
+    ],
+    shift: [
+      "최근 마스터 샘플을 교체했다면 새 샘플 특성 차이일 수 있음(정상)",
+      "특정 교대(주간/야간)에서만 나타나는지 확인 — 절차·숙련도 차이",
+      "측정 지그·피팅 위치 변경 여부(재조립·점검 이력) 확인",
+      "설비 압력·온도 설정값 변경 이력 대조"
+    ],
+    nearLimit: [
+      "같은 샘플을 연속 재측정해 반복성(편차) 확인",
+      "실링 오링 마모 초기 징후",
+      "압축공기 라인의 미세 누기·압력 불안정"
+    ],
+    volatility: [
+      "작업자별 측정 절차 편차(숙련도·경험 차이)",
+      "측정 전 안정화 대기시간 미준수",
+      "시편 장착 시 이물질·오염 개입",
+      "설비 주변 진동·환경 변화"
+    ]
+  };
+
+  // 각 규칙은 "지금 이 순간 진행 중인" 신호만 본다(과거에 있다 사라진 건 제외) —
+  // 이상조짐은 현재 시점 판단이 중요하기 때문.
+  // 계산된 평균·표준편차는 부동소수점 오차가 섞인다 — 예를 들어 3.2가 8번
+  // 반복되면 mean()이 정확히 3.2가 아니라 3.1999999999999997처럼 나올 수 있어,
+  // 완전히 안정적인 값인데도 "평균보다 미세하게 높다"는 식으로 잘못 갈릴 수 있다.
+  // 실제 측정값 단위(mL/min, 소수 3자리)보다 훨씬 작은 여유(EPS)를 두어 이를 막는다.
+  var TREND_EPS = 1e-9;
+
+  function detectTrend(points) {
+    var vals = points.map(function (p) { return p.v; });
+    var n = vals.length;
+    var findings = [];
+    if (n < 6) return findings;
+
+    var m = mean(vals);
+
+    // [1] 연속 상승·하강 추세 — 최근 값이 6회 연속 계속 커지거나 계속 작아짐
+    (function () {
+      var run = 1, dir = 0;
+      for (var i = n - 1; i > 0; i--) {
+        var d = vals[i] > vals[i - 1] ? 1 : vals[i] < vals[i - 1] ? -1 : 0;
+        if (i === n - 1) { dir = d; if (!d) return; run = 2; continue; }
+        if (d === dir) run++; else break;
+      }
+      if (run >= 6) {
+        var s = n - run;
+        findings.push({
+          key: "trend",
+          title: (dir > 0 ? "연속 상승 추세" : "연속 하강 추세") + " · " + run + "회 연속 진행 중",
+          detail: points[s].date + " " + points[s].shift + " ~ " + points[n - 1].date + " " + points[n - 1].shift +
+            " 동안 값이 " + run + "회 연속으로 " + (dir > 0 ? "이전 값보다 계속 커졌습니다." : "이전 값보다 계속 작아졌습니다.")
+        });
+      }
+    })();
+
+    // [2] 평균 한쪽 쏠림 — 최근 값이 8회 연속 이 샘플 평균의 한쪽에만 있음
+    (function () {
+      var run = 1, side = 0;
+      for (var i = n - 1; i >= 0; i--) {
+        var d = vals[i] > m + TREND_EPS ? 1 : vals[i] < m - TREND_EPS ? -1 : 0;
+        if (i === n - 1) { side = d; if (!d) return; continue; }
+        if (d === side) run++; else break;
+      }
+      if (run >= 8) {
+        var s = n - run;
+        findings.push({
+          key: "shift",
+          title: "평균 한쪽 쏠림 · " + run + "회 연속 " + (side > 0 ? "평균보다 높음" : "평균보다 낮음"),
+          detail: points[s].date + " ~ " + points[n - 1].date + " 사이 " + run + "회 전부 이 샘플의 평소 평균(" +
+            fmt(Math.round(m * 1000) / 1000) + ")보다 " + (side > 0 ? "높았습니다." : "낮았습니다.") +
+            " 측정 오차 범위를 벗어난 지속적인 쏠림입니다."
+        });
+      }
+    })();
+
+    // [3] 경고 구간 근접 — 최근 3회 중 2회 이상이 "그 이전까지의" 평균 ±2표준편차 바깥.
+    // 판정 대상인 최근 3개는 반드시 기준 계산에서 빼야 한다 — 포함시키면 극단값
+    // 자체가 기준 범위를 넓혀 버려서, 정작 그 극단값을 못 잡는 역설이 생긴다
+    // (실제로 이 방식으로 구현했다가 발견해 고쳤다 — 개선이력.md 참고).
+    if (n >= 8) {
+      var baseline = vals.slice(0, -3);
+      var bm = mean(baseline), bsd = stdev(baseline, bm);
+      if (bsd > TREND_EPS) {
+        var last3 = vals.slice(-3), pts3 = points.slice(-3);
+        var hi = [], lo = [];
+        last3.forEach(function (v, idx) {
+          if (v > bm + 2 * bsd) hi.push(pts3[idx].date);
+          if (v < bm - 2 * bsd) lo.push(pts3[idx].date);
+        });
+        if (hi.length >= 2) {
+          findings.push({
+            key: "nearLimit",
+            title: "경고 구간 근접 · 평소보다 크게 높음",
+            detail: "최근 3회 중 " + hi.length + "회(" + hi.join(", ") + ")가 그 이전까지의 평소 변동 범위(평균 " +
+              fmt(Math.round(bm * 1000) / 1000) + " ±2σ) 위쪽 경고선을 넘었습니다. 스펙 상한까지는 여유가 있어도, 이 샘플 자체의 평소 흔들림보다 큰 움직임입니다."
+          });
+        }
+        if (lo.length >= 2) {
+          findings.push({
+            key: "nearLimit",
+            title: "경고 구간 근접 · 평소보다 크게 낮음",
+            detail: "최근 3회 중 " + lo.length + "회(" + lo.join(", ") + ")가 그 이전까지의 평소 변동 범위(평균 " +
+              fmt(Math.round(bm * 1000) / 1000) + " ±2σ) 아래쪽 경고선을 넘었습니다."
+          });
+        }
+      }
+    }
+
+    // [4] 변동성 급증 — 최근 5회의 들쭉날쭉한 정도가 그 이전보다 뚜렷하게 커짐
+    if (n >= 10) {
+      var recent = vals.slice(-5), base = vals.slice(0, -5);
+      var sdRecent = stdev(recent), sdBase = stdev(base);
+      if (sdBase > TREND_EPS && sdRecent > sdBase * 1.8) {
+        findings.push({
+          key: "volatility",
+          title: "최근 변동폭 급증",
+          detail: "최근 5회 값의 들쭉날쭉한 정도(표준편차 " + fmt(Math.round(sdRecent * 1000) / 1000) +
+            ")가 그 이전 구간(" + fmt(Math.round(sdBase * 1000) / 1000) + ")보다 뚜렷하게 커졌습니다."
+        });
+      }
+    }
+
+    return findings;
+  }
+
+  function renderTrendNote(points) {
+    var findings = detectTrend(points);
+    if (!findings.length) return "";
+    var items = findings.map(function (f) {
+      var causes = CAUSE_HINTS[f.key] || [];
+      return '<div class="trend-item">' +
+        '<div class="trend-title">' + esc(f.title) + '</div>' +
+        '<div class="trend-detail">' + esc(f.detail) + '</div>' +
+        (causes.length
+          ? '<div class="trend-causes"><span class="k">흔히 보는 원인(참고용)</span><ul>' +
+            causes.map(function (c) { return "<li>" + esc(c) + "</li>"; }).join("") + "</ul></div>"
+          : "") +
+        "</div>";
+    }).join("");
+    return '<div class="trend-note">' +
+      '<div class="trend-head">⚠ 추이 이상 신호 ' + findings.length + '건</div>' +
+      items +
+      '<p class="trend-foot">스펙(상·하한) 이탈과는 별개로, 이 샘플의 평소 패턴과 통계적으로 다른 움직임을 자동으로 잡아낸 것입니다(통계 계산 — AI 판단이 아닙니다). 실제 원인은 현장에서 확인하세요 — 위 원인 목록은 일반적으로 흔한 사례이며, 이 설비 특성에 맞게 다듬어 쓰는 것을 권장합니다.</p>' +
+      "</div>";
+  }
+
   function renderChart() {
     var body = $("chartBody");
     var samples = cur().samples;
@@ -1017,6 +1210,7 @@
         '<div class="ch-spec">' + esc(specText(s)) + ' · ' + points.length + '회 기록' +
           (s.retired ? ' · 폐기일 ' + esc(s.retiredAt) : '') + '</div>' +
         chart.svg +
+        renderTrendNote(points) +
         '<div class="ch-legend">' +
           '<span><i style="background:#2f6e6c;"></i>누설값</span>' +
           '<span><i style="background:#b8453a;"></i>상·하한</span>' +
@@ -1358,6 +1552,7 @@
         statBox("단위", UNIT) +
       '</div>' +
       '<div class="chart-card">' + chart.svg +
+        renderTrendNote(pts) +
         '<div class="ch-legend"><span style="width:100%;">점을 터치하면 그때 값이 표시됩니다 · 숫자 뒤 &ldquo;야&rdquo; = 야간 교대</span></div>' +
       '</div>' +
       '<div class="table-scroll" style="max-height:280px;overflow:auto;">' +
