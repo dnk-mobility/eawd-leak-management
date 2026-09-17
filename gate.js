@@ -22,15 +22,19 @@
   떴다), QR을 찍을 때마다 이 연출을 보고 싶다는 요청으로 항상 재생하도록 바꿨다. 다만 암호까지
   다시 묻지는 않는다 — 이미 통과한 폰은 같은 연출이 재생되는 동안 입력칸 없는 환영 카드만 보여
   주고, 끝나면 화면이 페이드아웃되며 바로 앱으로 넘어간다(암호 카드가 뜨는 대신). 처음 통과하는
-  폰만 원래대로 연출 뒤에 암호 카드가 뜬다. prefers-reduced-motion 환경에서는 이미 통과한 폰은
-  기다림 없이 즉시 넘어간다 — 모션을 줄이고 싶다는 설정인데 연출을 못 보여줄 거면서 기다리게만
-  하는 건 앞뒤가 안 맞기 때문이다.
+  폰만 원래대로 연출 뒤에 암호 카드가 뜬다.
+  (처음에는 prefers-reduced-motion 기기에서 이미 통과한 경우 연출 자체를 건너뛰게 했었는데,
+  실사용 폰 중 "동작 줄이기"가 켜진 기기에서 "항상 보이면 좋겠다"는 요청과 정면으로 충돌해
+  애니메이션도 카드도 전혀 안 뜨는 것처럼 보였다. "항상"이라는 요청이 더 명확한 의도라 그
+  예외를 없앴다 — reduced-motion이어도 이 화면 자체는 항상 뜨고, CSS의
+  prefers-reduced-motion 미디어쿼리가 격자·스캔·선·카드의 전환 "애니메이션"만 정적으로
+  바꿔 보여준다(그림 자체는 그대로 나온다).
 */
 (function () {
   "use strict";
 
   var KEY = "leak_trend_gate_ok_v1";
-  var PASS_HASH = "6712da30aaaa05bee4d101db4fd64542e8ac7176769bab88f87e826456678fa9"; // dnkm8721 (기존 QR 시스템과 동일 암호)
+  var PASS_HASH = "6712da30aaaa05bee4d101db4fd64542e8ac7176769bab88f87e826456678fa9";
 
   function isUnlocked() {
     try {
@@ -60,17 +64,6 @@
   document.documentElement.style.visibility = "hidden";
 
   var already = isUnlocked();
-  var reduceMotion = false;
-  try {
-    reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  } catch (e) {}
-
-  // 이미 통과한 폰인데 모션도 줄이고 싶다면, 연출 없이 원래처럼 즉시 화면을 보여준다.
-  if (already && reduceMotion) {
-    document.documentElement.style.visibility = "visible";
-    window.dnkGate = { ready: Promise.resolve(true) };
-    return;
-  }
 
   var style = document.createElement("style");
   style.textContent =
@@ -136,7 +129,6 @@
   }
 
   // 이미 통과한 폰: 연출만 보여주고, 암호는 다시 묻지 않은 채 끝나면 화면으로 넘어간다.
-  // (reduceMotion이면서 already인 경우는 이 지점보다 앞에서 이미 걸러져 반환됐다.)
   if (already) {
     setTimeout(function () {
       wrap.classList.add("dnk-gate-out");
