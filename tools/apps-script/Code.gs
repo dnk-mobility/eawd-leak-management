@@ -121,6 +121,20 @@ function asNum(v) {
   return isNaN(n) ? null : n;
 }
 
+/**
+ * 자유 텍스트(샘플명·확인자·비고 등)를 시트 셀에 안전하게 넣기 위한 처리.
+ * setValues()로 넣는 문자열도 사람이 직접 타이핑한 것과 똑같이 취급되어,
+ * "=", "+", "-", "@" 로 시작하면 구글시트가 수식으로 해석해 버린다.
+ * 예: 확인자 이름을 "-5도 점검"이라고만 적어도 셀이 깨지고, 악의적으로
+ * "=IMPORTXML(\"https://...\",...)" 같은 값을 보내면 시트를 열 때 외부로
+ * 데이터가 새 나갈 수 있다 (2026-09-19 점검에서 발견 — 개선이력.md 참고).
+ * 앞에 어퍼스트로피(')를 붙이면 구글시트가 그 뒤를 항상 텍스트로만 취급한다.
+ */
+function safeText(v) {
+  var s = asText(v);
+  return /^[=+\-@\t]/.test(s) ? "'" + s : s;
+}
+
 /* =========================================================================
    읽기 — 설비 1개소의 마스터 샘플 정의 + 지정한 달의 기록
    ========================================================================= */
@@ -203,9 +217,10 @@ function push(payload) {
     for (var i = 0; i < rec.items.length; i++) {
       var it = rec.items[i];
       if (it.v === null || it.v === undefined || it.v === '') continue;
-      rows.push([eq, rec.date, rec.shift, rec.id, it.sid, it.name, it.type,
-                 it.v, it.nominal, it.lsl, it.usl, it.judge,
-                 rec.temp, rec.by, rec.note, ts]);
+      rows.push([safeText(eq), safeText(rec.date), safeText(rec.shift), safeText(rec.id),
+                 safeText(it.sid), safeText(it.name), safeText(it.type),
+                 asNum(it.v), asNum(it.nominal), asNum(it.lsl), asNum(it.usl), safeText(it.judge),
+                 asNum(rec.temp), safeText(rec.by), safeText(rec.note), ts]);
     }
     if (rows.length) {
       sh.getRange(sh.getLastRow() + 1, 1, rows.length, REC_HEAD.length).setValues(rows);
@@ -236,8 +251,9 @@ function saveSamples(payload) {
 
     var ts = nowStr();
     var rows = samples.map(function (s) {
-      return [eq, s.id, s.name, s.type, s.nominal, s.lsl, s.usl, ts, '',
-              s.retired ? 'Y' : '', s.retiredAt || ''];
+      return [safeText(eq), safeText(s.id), safeText(s.name), safeText(s.type),
+              asNum(s.nominal), asNum(s.lsl), asNum(s.usl), ts, '',
+              s.retired ? 'Y' : '', s.retiredAt ? safeText(s.retiredAt) : ''];
     });
     if (rows.length) {
       sh.getRange(sh.getLastRow() + 1, 1, rows.length, SAM_HEAD.length).setValues(rows);
