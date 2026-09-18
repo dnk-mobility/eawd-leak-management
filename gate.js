@@ -16,6 +16,12 @@
   한다 — 하루에 QR을 여러 번 찍는 운영이라면 이전보다 손이 더 간다. 이후 다시 "한 번만 물어보게"
   요청이 오면 localStorage로 되돌리면 된다(이 파일의 git 이력 참고).
 
+  2026-09-19 (6차): 암호 카드 안내 문구에서 "탭을 닫지 않는 동안에는 다시 안 묻는다"는
+  구체적인 지속 방식 설명을 뺐다 — 어떻게 하면 재인증을 피할 수 있는지를 화면에 그대로
+  알려주는 셈이라 악용 소지가 있다는 지적을 받음. 지금은 그냥 "접속 암호를 입력해 주세요"
+  정도의 중립적인 문구만 보여준다. 실제 동작(sessionStorage, 위 5차 설명)은 안 바뀌었다 —
+  화면에 설명을 안 할 뿐이다.
+
   2026-09-18: 배경 연출 추가 (계측 그리드 스캔 + 꺾은선 그리기 결합). 이 앱이 "누설값 트렌드"
   앱이라는 정체성을 게이트 화면에서부터 보여주려고 넣었다 — 격자가 옅게 깔리고, 스캔 라인이
   한 번 훑고 지나가면서 그 뒤로 꺾은선 그래프가 그려지고, 마지막에 암호 카드가 뜬다. 약 1.9초.
@@ -80,7 +86,11 @@
   var style = document.createElement("style");
   style.textContent =
     "#dnk-gate{position:fixed;inset:0;background:#1b4a49;display:flex;align-items:center;justify-content:center;overflow:hidden;z-index:99999;font-family:-apple-system,BlinkMacSystemFont,'Malgun Gothic','Apple SD Gothic Neo',sans-serif;visibility:visible;}" +
-    "#dnk-gate .bg-grid{position:absolute;inset:0;background-image:linear-gradient(#2c5f5d 1px,transparent 1px),linear-gradient(90deg,#2c5f5d 1px,transparent 1px);background-size:28px 28px;opacity:0;animation:dnkGridIn .6s ease .1s forwards;}" +
+    // 격자 색을 배경(#1b4a49)과 가까운 톤(#2c5f5d)에서 더 밝은 톤(#3d7a78)으로
+    // 올리고, 촘촘한 보조선(28px) 위에 굵은 주 눈금(112px, 더 밝은 색)을 겹쳐
+    // "계측 그래프"처럼 더 진하고 디테일하게 보이도록 했다(요청: 격자를 더 진하게).
+    "#dnk-gate .bg-grid{position:absolute;inset:0;background-image:linear-gradient(#3d7a78 1px,transparent 1px),linear-gradient(90deg,#3d7a78 1px,transparent 1px);background-size:28px 28px;opacity:0;animation:dnkGridIn .6s ease .1s forwards;}" +
+    "#dnk-gate .bg-grid-major{position:absolute;inset:0;background-image:linear-gradient(#4a8f8c 1px,transparent 1px),linear-gradient(90deg,#4a8f8c 1px,transparent 1px);background-size:112px 112px;opacity:0;animation:dnkGridIn .6s ease .1s forwards;}" +
     "#dnk-gate .bg-scan{position:absolute;left:0;right:0;top:-18%;height:30%;background:linear-gradient(180deg,rgba(159,196,192,0),rgba(159,196,192,.28),rgba(159,196,192,0));animation:dnkScan 1.3s cubic-bezier(.4,0,.2,1) .3s forwards;}" +
     // 꺾은선은 카드 글자 뒤(화면 한가운데)를 가로지르지 않도록 아래쪽에 둔다.
     // 예전에는 top:38%/height:24% 라 글자와 정확히 겹쳐 읽기 힘들었다.
@@ -106,13 +116,19 @@
     "@keyframes dnkScan{0%{top:-18%;}100%{top:100%;}}" +
     "@keyframes dnkCardIn{to{opacity:1;transform:none;}}" +
     "@keyframes dnkLineDraw{to{stroke-dashoffset:0;}}" +
+    "@keyframes dnkAreaIn{to{opacity:1;}}" +
+    "@keyframes dnkDotsIn{to{opacity:1;}}" +
     "@keyframes dnkGateOut{to{opacity:0;}}" +
     // 동작 줄이기: 애니메이션만 끄고, 각 요소는 "다 끝난 상태"로 고정한다.
     // (음영도 함께 켜 줘야 한다 — 기본값이 opacity:0이라 빼먹으면 글자 배경이 사라진다)
     "@media (prefers-reduced-motion:reduce){" +
-      "#dnk-gate .bg-grid,#dnk-gate .bg-scan,#dnk-gate .bg-line path,#dnk-gate .bg-scrim,.dnk-gate-card{" +
+      "#dnk-gate .bg-grid,#dnk-gate .bg-grid-major,#dnk-gate .bg-scan,#dnk-gate .bg-line path,#dnk-gate .bg-line-area,#dnk-gate .bg-line-dots,#dnk-gate .bg-scrim,.dnk-gate-card{" +
         "animation:none!important;transform:none!important;}" +
-      "#dnk-gate .bg-grid,#dnk-gate .bg-scan,#dnk-gate .bg-scrim,.dnk-gate-card{opacity:1!important;}}";
+      "#dnk-gate .bg-grid,#dnk-gate .bg-grid-major,#dnk-gate .bg-scan,#dnk-gate .bg-line-area,#dnk-gate .bg-line-dots,#dnk-gate .bg-scrim,.dnk-gate-card{opacity:1!important;}" +
+      // path는 opacity가 아니라 stroke-dashoffset으로 그려지므로, 애니메이션을 꺼도
+      // 이것까지 0으로 같이 고정해야 "다 그려진 상태"로 보인다 — 안 그러면 선 자체가
+      // 안 보이게 된다(구현 중 자체 발견, 격자 진하게 하는 작업 중 재확인).
+      "#dnk-gate .bg-line path{stroke-dashoffset:0!important;}}";
   document.documentElement.appendChild(style);
 
   var wrap = document.createElement("div");
@@ -124,11 +140,33 @@
   }
   wrap.innerHTML =
     '<div class="bg-grid"></div>' +
+    '<div class="bg-grid-major"></div>' +
     '<div class="bg-scan"></div>' +
+    // 꺾은선에 디테일을 더했다(요청) — 선 아래 옅은 면적 채우기, 각 지점에 작은 점,
+    // 기준선(점선) 1개를 추가해 실제 트렌드 그래프에 더 가까운 인상을 준다.
+    // 순서대로: 기준선(가장 먼저, 은은하게) → 면적 채우기 → 꺾은선(기존과 동일하게
+    // 그려지는 연출) → 지점 점들(선이 다 그려진 뒤 마지막에 톡톡 나타남).
     '<svg class="bg-line" viewBox="0 0 200 60" preserveAspectRatio="none">' +
+      '<defs>' +
+        '<linearGradient id="dnkLineFill" x1="0" y1="0" x2="0" y2="1">' +
+          '<stop offset="0%" stop-color="#9fc4c0" stop-opacity=".24"/>' +
+          '<stop offset="100%" stop-color="#9fc4c0" stop-opacity="0"/>' +
+        '</linearGradient>' +
+      '</defs>' +
+      '<line x1="0" y1="20" x2="200" y2="20" stroke="#9fc4c0" stroke-width="1" stroke-dasharray="3 3" opacity=".22"/>' +
+      '<path class="bg-line-area" d="M0,46 L34,30 L68,38 L102,14 L136,24 L200,6 L200,60 L0,60 Z" ' +
+        'fill="url(#dnkLineFill)" style="opacity:0;animation:dnkAreaIn .6s ease 1.05s forwards;"/>' +
       '<path d="M0,46 L34,30 L68,38 L102,14 L136,24 L200,6" fill="none" stroke="#9fc4c0" stroke-width="2" ' +
         'stroke-linecap="round" stroke-linejoin="round" pathLength="1" ' +
         'style="stroke-dasharray:1;stroke-dashoffset:1;animation:dnkLineDraw 1s ease .5s forwards;"/>' +
+      '<g class="bg-line-dots" style="opacity:0;animation:dnkDotsIn .4s ease 1.35s forwards;">' +
+        '<circle cx="0" cy="46" r="2.2" fill="#9fc4c0"/>' +
+        '<circle cx="34" cy="30" r="2.2" fill="#9fc4c0"/>' +
+        '<circle cx="68" cy="38" r="2.2" fill="#9fc4c0"/>' +
+        '<circle cx="102" cy="14" r="2.2" fill="#9fc4c0"/>' +
+        '<circle cx="136" cy="24" r="2.2" fill="#9fc4c0"/>' +
+        '<circle cx="200" cy="6" r="3.2" fill="#f0e6d2" stroke="#1b4a49" stroke-width="1"/>' +
+      '</g>' +
     '</svg>' +
     '<div class="bg-scrim"></div>' +
     (already
@@ -139,7 +177,7 @@
       : '<div class="dnk-gate-card">' +
         '<div class="dnk-gate-brand">DnK MOBILITY · 후공정 생산기술팀</div>' +
         '<div class="dnk-gate-title" id="dnk-gate-title">사내 전용 페이지입니다</div>' +
-        '<div class="dnk-gate-sub">이 화면을 닫지 않는 동안에는 다시 묻지 않습니다.<br>QR을 다시 찍거나 새로 열면 한 번 더 확인합니다.</div>' +
+        '<div class="dnk-gate-sub">계속하려면 접속 암호를 입력해 주세요.</div>' +
         '<input id="dnk-gate-pw" class="dnk-gate-input" type="password" placeholder="접속 암호" aria-label="접속 암호" autocomplete="off" />' +
         '<div id="dnk-gate-err" class="dnk-gate-err" role="alert"></div>' +
         '<button id="dnk-gate-go" class="dnk-gate-btn" type="button">확인</button>' +
@@ -178,7 +216,13 @@
     // 고정 타이머로 "몇 초 뒤 종료"를 재지 않는다. 최초 로드 때 애니메이션 시작이
     // 수백 ms 밀리면 마지막 동작이 잘리고, delay·duration을 나중에 조정하면 어느
     // 것이 가장 늦게 끝나는지가 바뀌기 때문. 그래서 끝난 개수를 센다.
-    var animated = wrap.querySelectorAll(".bg-grid,.bg-scan,.bg-line path,.dnk-gate-card");
+    // wrap에서 발생하는 모든 animationend가 이 카운트를 깎으므로(아래 리스너가
+    // 선택자로 걸러 듣지 않음), 애니메이션이 걸린 요소를 새로 추가할 때마다
+    // 이 목록도 같이 늘려야 한다 — 안 그러면 실제보다 이르게 pending이 0이 되어
+    // 뒤에 남은 애니메이션이 안 끝났는데도 화면이 먼저 넘어가 버린다.
+    var animated = wrap.querySelectorAll(
+      ".bg-grid,.bg-grid-major,.bg-scan,.bg-line path,.bg-line-area,.bg-line-dots,.dnk-gate-card"
+    );
     var pending = animated.length;
 
     // 동작 줄이기 설정이면 CSS가 애니메이션을 꺼버려 animationend가 아예 오지 않는다.
@@ -208,7 +252,8 @@
   var btn = wrap.querySelector("#dnk-gate-go");
 
   function tryUnlock() {
-    sha256Hex(input.value).then(function (hex) {
+    // 모바일 자동완성/자동교정이 앞뒤 공백을 붙여 넣는 경우가 있어, 비교 전에 trim한다.
+    sha256Hex(input.value.trim()).then(function (hex) {
       if (hex === PASS_HASH) {
         markUnlocked();
         reveal();

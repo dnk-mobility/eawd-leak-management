@@ -29,6 +29,12 @@
   .period-bar{max-width:640px;margin:10px auto 0;padding:0 14px;}
   .period-bar .seg{max-width:220px;}
 
+  /* 페이지 맨 위 period-bar와 같은 토글을 그래프 카드 안에도 하나 더 둔다 —
+     맨 위 것은 스크롤해서 그래프까지 내려가면 화면 밖으로 벗어나 "안 보인다"는
+     혼동을 유발했다(요청·개선이력.md 참고). 두 토글은 setPeriod()에서 함께
+     갱신된다(#periodSeg, #periodSeg2 둘 다 반영). */
+  .period-seg-inline{max-width:220px;margin:0 14px 10px;}
+
   .month-bar{
     max-width:640px;margin:10px auto 0;padding:0 14px;
     display:flex;align-items:center;gap:8px;
@@ -287,21 +293,16 @@
   .help-live-head{font-size:12.5px;font-weight:800;color:var(--navy);margin-bottom:6px;}
   .help-live-body{font-size:12px;color:var(--gray-700);line-height:1.55;}
   .help-live-finding + .help-live-finding{margin-top:8px;padding-top:8px;border-top:1px dashed var(--gray-300);}
-  /* NG 점(빨간 점) 호버 효과 — 마우스가 있는 환경(PC)에서만 건다.
-     터치 기기는 :hover가 "탭한 뒤에도 계속 남는" 경우가 있어(sticky hover),
-     pointer:fine 없이 걸면 폰에서 점을 한 번 탭한 뒤 계속 빨갛게 깜빡이는 것처럼
-     보일 수 있다 — 이 프로젝트가 참고한 QR 정보관리 시스템도 같은 이유로
-     hover 규칙을 이 미디어쿼리 안에만 둔다. 폰에서는 대신 점을 탭하면 값이
-     뜨는 기능(attachChartTouch)이 이미 있어, 그게 사실상 같은 역할을 한다. */
-  @media (hover:hover) and (pointer:fine){
-    .chart-card svg .pt-ng{cursor:pointer;}
-    .chart-card svg .pt-ng:hover{animation:ngPulse .9s ease-in-out infinite;}
-  }
+  /* NG 점(빨간 점) 강조 — 마우스를 올리지 않아도 항상 흐려졌다 진해지는 것을
+     반복한다(요청에 따라 hover 전용에서 상시 표시로 바꿈). PC·폰 구분 없이 같은
+     효과가 보인다 — 폰에서도 그래프를 보자마자 NG 지점이 바로 눈에 띄어야
+     한다는 취지. 동작 줄이기(prefers-reduced-motion) 환경에서는 애니메이션을 끈다. */
+  .chart-card svg .pt-ng{animation:ngPulse 1.3s ease-in-out infinite;}
   @keyframes ngPulse{
     0%,100%{opacity:1;filter:drop-shadow(0 0 0 rgba(184,69,58,0));}
-    50%{opacity:.5;filter:drop-shadow(0 0 5px rgba(184,69,58,.95));}
+    50%{opacity:.45;filter:drop-shadow(0 0 5px rgba(184,69,58,.95));}
   }
-  @media (prefers-reduced-motion:reduce){ .toast,.ch-tip{transition:none;} .chart-card svg .pt-ng:hover{animation:none;} }
+  @media (prefers-reduced-motion:reduce){ .toast,.ch-tip{transition:none;} .chart-card svg .pt-ng{animation:none;} }
 </style>
 </head>
 <body>
@@ -399,6 +400,10 @@
 
   <details class="section" id="secChart" open>
     <summary><span class="num">②</span>누설값 트렌드 그래프<span class="chev">▾</span></summary>
+    <div class="seg period-seg-inline" id="periodSeg2">
+      <button type="button" data-period="week">주간</button>
+      <button type="button" data-period="month" class="on">월간</button>
+    </div>
     <div class="body" id="chartBody"></div>
   </details>
 
@@ -801,7 +806,8 @@
     if (p === period) return;
     period = p;
     if (period === "week") weekStart = mondayOf($("inDate").value || todayStr());
-    $("periodSeg").querySelectorAll("button").forEach(function (b) {
+    // 페이지 맨 위(#periodSeg)와 그래프 카드 안(#periodSeg2) 두 토글을 함께 갱신한다.
+    document.querySelectorAll("#periodSeg button, #periodSeg2 button").forEach(function (b) {
       b.classList.toggle("on", b.getAttribute("data-period") === period);
     });
     renderAll();
@@ -1876,7 +1882,8 @@
   }
 
   function tryCalibUnlock() {
-    var pw = $("calibPw").value;
+    // 모바일 자동완성/자동교정이 앞뒤 공백을 붙여 넣는 경우가 있어, 비교 전에 trim한다.
+    var pw = $("calibPw").value.trim();
     sha256HexLocal(pw).then(function (hex) {
       if (hex === CALIB_HASH) {
         markCalibUnlocked();
@@ -1915,7 +1922,7 @@
       $("calibUnlockErr").textContent = "게이트 정보를 읽지 못했습니다. 새로고침 후 다시 시도하세요.";
       return;
     }
-    gate.sha256Hex($("calibUnlockPw").value).then(function (hex) {
+    gate.sha256Hex($("calibUnlockPw").value.trim()).then(function (hex) {
       if (hex === gate.passHash) {
         $("calibUnlockPw").value = "";
         $("calibUnlockErr").textContent = "";
@@ -2643,6 +2650,7 @@
 
   function closeHelp() {
     $("helpPanel").hidden = true;
+    $("helpPanel").classList.remove("kb-avoid");
     $("helpFab").setAttribute("aria-expanded", "false");
     $("helpFabIcon").textContent = "?";
   }
@@ -2659,14 +2667,17 @@
     // 터치 기기(손가락 위주 포인터)에서만 — 검색칸에 포커스하면(키보드가 뜨면)
     // 패널을 화면 위쪽으로 옮겨 키보드에 가려지지 않게 한다. PC는 키보드가
     // 화면을 덮지 않으므로 그대로 둔다.
+    // blur에서는 원래 위치로 되돌리지 않는다 — 폰에서 검색어를 입력한 뒤
+    // 키보드의 "검색/완료"를 누르면 포커스가 빠지면서(blur) 패널이 그 순간
+    // 원래 자리(화면 아래)로 도로 튕겨 내려가, 방금 나온 실시간 분석 결과가
+    // 사용자가 보고 있던 화면 위쪽에서 사라진 것처럼 보이는 문제가 있었다
+    // ("엔터 쳐도 반응이 없다"는 보고의 유력한 원인). 패널을 닫을 때(closeHelp)
+    // 한 번만 원래 위치로 되돌리면 된다 — 열려 있는 동안은 위치를 유지한다.
     var isTouch = false;
     try { isTouch = window.matchMedia("(pointer:coarse)").matches; } catch (e) {}
     if (isTouch) {
       $("helpSearch").addEventListener("focus", function () {
         $("helpPanel").classList.add("kb-avoid");
-      });
-      $("helpSearch").addEventListener("blur", function () {
-        $("helpPanel").classList.remove("kb-avoid");
       });
     }
 
@@ -2716,10 +2727,12 @@
     $("prevM").addEventListener("click", function () { shiftPeriod(-1); });
     $("nextM").addEventListener("click", function () { shiftPeriod(1); });
 
-    $("periodSeg").addEventListener("click", function (e) {
-      var b = e.target.closest("button[data-period]");
-      if (!b) return;
-      setPeriod(b.getAttribute("data-period"));
+    document.querySelectorAll("#periodSeg, #periodSeg2").forEach(function (seg) {
+      seg.addEventListener("click", function (e) {
+        var b = e.target.closest("button[data-period]");
+        if (!b) return;
+        setPeriod(b.getAttribute("data-period"));
+      });
     });
 
     $("inDate").addEventListener("change", function () {
