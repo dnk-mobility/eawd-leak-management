@@ -194,6 +194,17 @@
       { action: "samples", data: JSON.stringify({ eq: eq, samples: samples }) });
   }
 
+  // 보정 이력(QR 정보관리 시스템에서 이관, 2026-09-19) — 추가·삭제만 지원
+  function pushCalib(eq, item) {
+    return send("calib:" + eq + ":" + item.id,
+      { action: "calibPush", data: JSON.stringify({ eq: eq, item: item }) });
+  }
+
+  function deleteCalib(eq, item) {
+    return send("calib:" + eq + ":" + item.id,
+      { action: "calibPush", data: JSON.stringify({ eq: eq, item: item, deleted: true }) });
+  }
+
   window.dnkSync = {
     enabled: enabled,
     urlIsFixed: urlIsFixed,
@@ -204,6 +215,8 @@
     pushRecord: pushRecord,
     deleteRecord: deleteRecord,
     pushSamples: pushSamples,
+    pushCalib: pushCalib,
+    deleteCalib: deleteCalib,
     wipe: wipe,
     queueSize: queueSize,
     flush: flush

@@ -264,10 +264,14 @@
   .help-q .tag.admin{background:var(--warn-bg);color:var(--warn-text);}
   .help-q .chev{margin-left:auto;color:var(--gray-400);flex-shrink:0;}
   .help-a{padding:0 14px 12px 14px;font-size:12px;color:var(--gray-700);line-height:1.55;}
-  .help-a .goto{
+  .goto{
     display:inline-block;margin-top:8px;border:none;background:var(--accent);color:#fff;
     font-family:inherit;font-size:11.5px;font-weight:700;padding:7px 12px;border-radius:6px;cursor:pointer;
   }
+  .help-live{margin:8px 12px;padding:10px 12px;border-radius:8px;background:var(--gray-100);border:1px solid var(--gray-300);}
+  .help-live-head{font-size:12.5px;font-weight:800;color:var(--navy);margin-bottom:6px;}
+  .help-live-body{font-size:12px;color:var(--gray-700);line-height:1.55;}
+  .help-live-finding + .help-live-finding{margin-top:8px;padding-top:8px;border-top:1px dashed var(--gray-300);}
   @media (prefers-reduced-motion:reduce){ .toast,.ch-tip{transition:none;} }
 </style>
 </head>
@@ -376,8 +380,23 @@
     </div>
   </details>
 
+  <details class="section" id="secCalib">
+    <summary><span class="num">⑤</span>디텍터 보정 이력<span class="chev">▾</span></summary>
+    <div class="body">
+      <div id="calibGate">
+        <p class="hint" style="margin:0 0 12px;">마스터 샘플로 디텍터(LS-R700)를 점검하고 Fixed comp value를 수정한 이력입니다. 설비 내부 파라미터를 다루므로 <b>별도 암호</b>가 필요합니다.</p>
+        <div class="fld"><label>보정 이력 열람 암호</label>
+          <input type="password" id="calibPw" placeholder="암호 입력" autocomplete="off">
+        </div>
+        <button class="btn sub" id="calibGateBtn" type="button">확인</button>
+        <p class="hint" id="calibGateErr" style="color:var(--warn-text);"></p>
+      </div>
+      <div id="calibContent" hidden></div>
+    </div>
+  </details>
+
   <details class="section" id="secData">
-    <summary><span class="num">⑤</span>데이터 · 연동 설정<span class="chev">▾</span></summary>
+    <summary><span class="num">⑥</span>데이터 · 연동 설정<span class="chev">▾</span></summary>
     <div class="body">
       <h4 class="sub">구글시트 연동</h4>
       <p class="hint" id="syncDesc" style="margin:0 0 10px;"></p>
@@ -496,12 +515,12 @@
     var s = [];
     EQ[id].defaults.forEach(function (name) {
       s.push({
-        id: uid(), name: name,
+        id: uid(), name: name, qrNo: "",
         type: /NG/i.test(name) ? "NG" : "OK",
         nominal: null, lsl: null, usl: null
       });
     });
-    return { samples: s, recs: [] };
+    return { samples: s, recs: [], calib: [] };
   }
 
   function load() {
@@ -515,6 +534,7 @@
       if (!db.eq[id]) db.eq[id] = blankEq(id);
       if (!Array.isArray(db.eq[id].samples)) db.eq[id].samples = [];
       if (!Array.isArray(db.eq[id].recs)) db.eq[id].recs = [];
+      if (!Array.isArray(db.eq[id].calib)) db.eq[id].calib = [];
     });
   }
 
@@ -1175,6 +1195,11 @@
           if (v > bm + 2 * bsd) hi.push(pts3[idx].date);
           if (v < bm - 2 * bsd) lo.push(pts3[idx].date);
         });
+        var hiLimit = fmt(Math.round((bm + 2 * bsd) * 1000) / 1000);
+        var loLimit = fmt(Math.round((bm - 2 * bsd) * 1000) / 1000);
+        var bmText = fmt(Math.round(bm * 1000) / 1000);
+        var bsdText = fmt(Math.round(bsd * 1000) / 1000);
+        var sdGloss = "표준편차(평소 값이 평균에서 얼마나 벗어나 있는지를 나타내는 통계 수치)";
         if (hi.length >= 2) {
           findings.push({
             key: "nearLimit",
@@ -1182,8 +1207,9 @@
             plain: "스펙(상한·하한) 판정으로는 아직 문제없는 값들입니다. 다만 최근 3번 중 " + hi.length +
               "번이, 이 샘플이 평소 흔들리던 폭을 벗어날 만큼 눈에 띄게 높게 나왔습니다. " +
               "지금 당장 불량은 아니지만, 평소보다 확실히 불안정해진 상태라 한번 확인해 볼 필요가 있습니다.",
-            detail: "최근 3회 중 " + hi.length + "회(" + hi.join(", ") + ")가 그 이전까지의 평소 변동 범위(평균 " +
-              fmt(Math.round(bm * 1000) / 1000) + " " + UNIT + " ± 평소 흔들림폭의 2배) 위쪽을 벗어났음"
+            detail: sdGloss + " 기준으로, 평소 범위의 위쪽 경계는 " + hiLimit + " " + UNIT +
+              "(평균 " + bmText + " + 표준편차 " + bsdText + " × 2)인데, 최근 3회 중 " + hi.length +
+              "회(" + hi.join(", ") + ")가 이 경계를 넘었음"
           });
         }
         if (lo.length >= 2) {
@@ -1193,8 +1219,9 @@
             plain: "스펙(상한·하한) 판정으로는 아직 문제없는 값들입니다. 다만 최근 3번 중 " + lo.length +
               "번이, 이 샘플이 평소 흔들리던 폭을 벗어날 만큼 눈에 띄게 낮게 나왔습니다. " +
               "지금 당장 불량은 아니지만, 평소보다 확실히 불안정해진 상태라 한번 확인해 볼 필요가 있습니다.",
-            detail: "최근 3회 중 " + lo.length + "회(" + lo.join(", ") + ")가 그 이전까지의 평소 변동 범위(평균 " +
-              fmt(Math.round(bm * 1000) / 1000) + " " + UNIT + " ± 평소 흔들림폭의 2배) 아래쪽을 벗어났음"
+            detail: sdGloss + " 기준으로, 평소 범위의 아래쪽 경계는 " + loLimit + " " + UNIT +
+              "(평균 " + bmText + " − 표준편차 " + bsdText + " × 2)인데, 최근 3회 중 " + lo.length +
+              "회(" + lo.join(", ") + ")가 이 경계를 넘었음"
           });
         }
       }
@@ -1216,8 +1243,9 @@
           plain: "최근 5번의 측정값이 예전보다 훨씬 들쭉날쭉합니다(같은 사람·같은 방법으로 재도 오르락내리락하는 " +
             "폭이 이전보다 " + ratioText + " 커졌습니다). 어느 한 방향으로 나빠지는 게 아니라 " +
             "값 자체가 예측하기 어려워진 상태라, 공정이나 측정 과정이 불안정해졌다는 신호일 수 있습니다.",
-          detail: "최근 5회 값의 흔들림 정도가 그 이전 구간보다 " + ratioText + " 커졌음(수치로는 " +
-            fmt(Math.round(sdRecent * 1000) / 1000) + " " + UNIT + " vs 이전 " + fmt(Math.round(sdBase * 1000) / 1000) + " " + UNIT + ")"
+          detail: "표준편차(값이 평소 얼마나 흩어져 있는지를 나타내는 통계 수치)로 비교하면, 최근 5회는 " +
+            fmt(Math.round(sdRecent * 1000) / 1000) + " " + UNIT + ", 그 이전 구간은 " +
+            fmt(Math.round(sdBase * 1000) / 1000) + " " + UNIT + "로 " + ratioText + " 커졌음"
         });
       }
     }
@@ -1415,8 +1443,12 @@
         (s.retired ?
           '<p class="hint" style="color:var(--warn-text);margin:0 0 8px;">이 샘플은 ' + esc(s.retiredAt) +
           ' 부터 사용 중지(폐기)되었습니다. 지난 기록·그래프는 그대로 남아 있고, ①입력 화면에는 더 이상 나타나지 않습니다.</p>' : '') +
-        '<div class="fld"><label>샘플명</label>' +
-          '<input type="text" data-f="name" value="' + esc(s.name) + '" autocomplete="off"></div>' +
+        '<div class="fld-row">' +
+          '<div class="fld"><label>샘플명</label>' +
+            '<input type="text" data-f="name" value="' + esc(s.name) + '" autocomplete="off"></div>' +
+          '<div class="fld"><label>QR 코드 번호</label>' +
+            '<input type="text" data-f="qrNo" value="' + esc(s.qrNo || "") + '" placeholder="예: Q-0123" autocomplete="off"></div>' +
+        '</div>' +
         '<div class="fld"><label>구분</label>' +
           '<select data-f="type">' +
             '<option value="OK"' + (s.type === "OK" ? " selected" : "") + '>OK 마스터</option>' +
@@ -1447,6 +1479,7 @@
         var usl = num(row.querySelector('[data-f="usl"]').value);
         if (lsl !== null && usl !== null && lsl > usl) { toast("하한값이 상한값보다 큽니다"); return; }
         s.name = name;
+        s.qrNo = row.querySelector('[data-f="qrNo"]').value.trim();
         s.type = row.querySelector('[data-f="type"]').value;
         s.nominal = num(row.querySelector('[data-f="nominal"]').value);
         s.lsl = lsl;
@@ -1530,12 +1563,13 @@
         var e = db.eq[eqAt];
         if (data.samples && data.samples.length) {
           e.samples = data.samples.map(function (x) {
-            return { id: x.id, name: x.name, type: x.type === "NG" ? "NG" : "OK",
+            return { id: x.id, name: x.name, qrNo: x.qrNo || "", type: x.type === "NG" ? "NG" : "OK",
                      nominal: x.nominal, lsl: x.lsl, usl: x.usl,
                      retired: !!x.retired, retiredAt: x.retiredAt || null };
           });
         }
         e.recs = data.recs || [];                  // 전 기간을 받았으므로 통째로 바꿔도 안전
+        if (data.calib) e.calib = data.calib;
         save();
         return "server";
       });
@@ -1654,7 +1688,7 @@
     name = name.trim();
     if (!name) return;
     cur().samples.push({
-      id: uid(), name: name,
+      id: uid(), name: name, qrNo: "",
       type: /NG/i.test(name) ? "NG" : "OK",
       nominal: null, lsl: null, usl: null
     });
@@ -1666,7 +1700,232 @@
   }
 
   /* =========================================================================
-     ⑤ 백업 · 내보내기
+     ⑤ 디텍터 보정 이력 (QR 정보관리 시스템에서 이관, 2026-09-19)
+     ------------------------------------------------------------------------
+     리크 테스터 디텍터(LS-R700)를 마스터 샘플로 점검하고 Fixed comp value를
+     고친 이력. 원래 QR 정보관리 시스템의 설비 상세 페이지에 있었으나, 그 쪽은
+     정적 페이지라 계속 값을 누적 입력할 수 없어 여기로 옮겨 왔다
+     (인계_마스터샘플_보정이력.md 참고).
+
+     원본 대비 개선한 점:
+     - 원본은 "OK 마스터(하우징)"/"OK 마스터(인버터)"처럼 샘플명에 채널을 접미사로
+       붙였다(그때는 채널이 나뉘어 있지 않았으므로). 지금은 130-h/130-i처럼 채널
+       자체가 나뉘어 있어 그럴 필요가 없다 — 샘플은 그 채널의 ④에서 관리하는
+       마스터 샘플을 그대로 고른다(드롭다운, 오타 방지).
+     - "판정"을 완전 수동 입력 대신, 리크값-후를 선택한 샘플의 스펙(하한·상한)과
+       비교해 자동으로 제안한다(그래도 최종 확인은 사람이 함 — 강제 아님).
+     - 접근 제한: 관리자 한 명만 입력·열람하게 해 달라는 요청에 따라, 일반 접속
+       암호와는 별개의 2차 암호를 둔다. 이 암호를 아는 사람만 이 섹션에 들어올 수
+       있으므로, 그 대상을 관리자 한 명으로 좁히면 사실상 그 사람만 쓸 수 있다.
+       QR 시스템의 2차 암호(data-lock="2")와 같은 발상이지만 sessionStorage를
+       쓴다 — 1차 암호(이 폰에서 평생 1회)보다 더 자주 재확인되어야 하는
+       데이터라고 판단해서다(탭을 닫으면 다시 물어봄).
+     - "수정(덮어쓰기)"은 지원하지 않는다 — 원본 설계가 "새 이력은 맨 아래에
+       계속 추가"였고, 같은 날 같은 샘플을 두 번 보정하는 일도 있어 자연키로
+       묶을 수 없다. 잘못 입력했으면 삭제 후 다시 추가한다.
+     ========================================================================= */
+  var CALIB_KEY = "dnk_calib_ok_v1";
+  // 암호: calib-4720 (관리자 전용 — 바꾸려면 아래 명령으로 새 해시를 만들어 교체)
+  // node -e "console.log(require('crypto').createHash('sha256').update('새암호','utf8').digest('hex'))"
+  var CALIB_HASH = "f47fc8df1c84d31a9d81613108ceed3c4b83beeee16583e9a0e338a3c5fe2839";
+
+  function calibUnlocked() {
+    try { return sessionStorage.getItem(CALIB_KEY) === "1"; } catch (e) { return false; }
+  }
+  function markCalibUnlocked() {
+    try { sessionStorage.setItem(CALIB_KEY, "1"); } catch (e) {}
+  }
+  // gate.js의 sha256Hex와 같은 계산이지만, 이 스크립트 스코프에서는 gate.js
+  // 내부 함수에 접근할 수 없어 똑같이 하나 더 둔다.
+  function sha256HexLocal(text) {
+    var buf = new TextEncoder().encode(text);
+    return crypto.subtle.digest("SHA-256", buf).then(function (hash) {
+      return Array.prototype.map.call(new Uint8Array(hash), function (b) {
+        return ("0" + b.toString(16)).slice(-2);
+      }).join("");
+    });
+  }
+
+  function tryCalibUnlock() {
+    var pw = $("calibPw").value;
+    sha256HexLocal(pw).then(function (hex) {
+      if (hex === CALIB_HASH) {
+        markCalibUnlocked();
+        $("calibPw").value = "";
+        $("calibGateErr").textContent = "";
+        renderCalibGate();
+      } else {
+        $("calibGateErr").textContent = "암호가 올바르지 않습니다";
+        $("calibPw").value = "";
+        $("calibPw").focus();
+      }
+    });
+  }
+
+  function renderCalibGate() {
+    var unlocked = calibUnlocked();
+    $("calibGate").hidden = unlocked;
+    $("calibContent").hidden = !unlocked;
+    if (unlocked) renderCalib();
+  }
+
+  function renderCalib() {
+    var box = $("calibContent");
+    var samples = cur().samples;
+
+    if (!samples.length) {
+      box.innerHTML = '<p class="hint">먼저 ④마스터 샘플 · 스펙 관리에서 샘플을 등록하세요.</p><div id="calibList"></div>';
+      renderCalibList();
+      return;
+    }
+
+    var sampleOptions = samples.map(function (s) {
+      return '<option value="' + esc(s.id) + '">' + esc(s.name) + (s.retired ? " (폐기됨)" : "") + "</option>";
+    }).join("");
+
+    box.innerHTML =
+      '<h4 class="sub">새 보정 이력 입력</h4>' +
+      '<div class="fld-row">' +
+        '<div class="fld"><label>일자</label><input type="date" id="calDate" value="' + esc(todayStr()) + '"></div>' +
+        '<div class="fld"><label>샘플</label><select id="calSample">' + sampleOptions + '</select></div>' +
+      '</div>' +
+      '<div class="fld-row">' +
+        '<div class="fld"><label>리크값 - 전 (' + UNIT + ')</label><input type="number" step="0.001" inputmode="decimal" id="calLeakBefore" placeholder="—"></div>' +
+        '<div class="fld"><label>리크값 - 후 (' + UNIT + ')</label><input type="number" step="0.001" inputmode="decimal" id="calLeakAfter" placeholder="—"></div>' +
+      '</div>' +
+      '<div class="fld-row">' +
+        '<div class="fld"><label>comp value - 전</label><input type="number" step="0.001" inputmode="decimal" id="calCompBefore" placeholder="—"></div>' +
+        '<div class="fld"><label>comp value - 후</label><input type="number" step="0.001" inputmode="decimal" id="calCompAfter" placeholder="—"></div>' +
+      '</div>' +
+      '<div class="fld-row">' +
+        '<div class="fld"><label>설비주변온도 (℃)</label><input type="number" step="0.1" inputmode="decimal" id="calTemp" placeholder="예: 22.4"></div>' +
+        '<div class="fld"><label>판정</label><select id="calJudge"><option value="OK">OK</option><option value="NG">NG</option></select></div>' +
+      '</div>' +
+      '<div class="fld"><label style="display:flex;align-items:center;gap:6px;text-transform:none;font-size:12.5px;font-weight:600;color:var(--gray-700);">' +
+        '<input type="checkbox" id="calImpreg" style="width:auto;">재함침 처리함</label></div>' +
+      '<div class="fld"><label>확인자</label><input type="text" id="calBy" placeholder="이름 입력" autocomplete="off"></div>' +
+      '<div class="fld"><label>비고</label><input type="text" id="calNote" placeholder="특이사항 (선택)" autocomplete="off"></div>' +
+      '<button class="btn" id="calSaveBtn" type="button">보정 이력 저장</button>' +
+      '<div id="calibList" style="margin-top:16px;"></div>';
+
+    // 리크값-후를 입력하면 선택한 샘플의 스펙 기준으로 판정을 자동 제안한다
+    // (최종 확인은 사람이 함 — 자동 확정이 아니라 드롭다운 값을 미리 맞춰 두는 것뿐)
+    function suggestJudge() {
+      var s = sampleById($("calSample").value);
+      var v = num($("calLeakAfter").value);
+      if (s && v !== null) $("calJudge").value = judge(v, s.lsl, s.usl) === "NG" ? "NG" : "OK";
+    }
+    $("calLeakAfter").addEventListener("input", suggestJudge);
+    $("calSample").addEventListener("change", suggestJudge);
+
+    try { $("calBy").value = localStorage.getItem(USER_KEY) || ""; } catch (e) {}
+
+    $("calSaveBtn").addEventListener("click", doSaveCalib);
+
+    renderCalibList();
+  }
+
+  function doSaveCalib() {
+    var date = $("calDate").value;
+    if (!date) { toast("일자를 선택하세요"); return; }
+    var s = sampleById($("calSample").value);
+    if (!s) { toast("샘플을 선택하세요"); return; }
+
+    var item = {
+      id: uid(), date: date, sid: s.id, sampleName: s.name,
+      leakBefore: num($("calLeakBefore").value), leakAfter: num($("calLeakAfter").value),
+      impregnated: $("calImpreg").checked,
+      compBefore: num($("calCompBefore").value), compAfter: num($("calCompAfter").value),
+      temp: num($("calTemp").value),
+      judge: $("calJudge").value,
+      by: $("calBy").value.trim(), note: $("calNote").value.trim(),
+      ts: new Date().toISOString()
+    };
+
+    cur().calib.push(item);
+    save();
+    try { if (item.by) localStorage.setItem(USER_KEY, item.by); } catch (e) {}
+    renderCalibList();
+    afterWrite(syncOn() ? sync.pushCalib(eqId, item) : null);
+
+    // 다음 입력을 위해 값만 비운다 — 같은 샘플을 연속으로 보정하는 경우가 많아
+    // 샘플 선택·확인자는 그대로 둔다
+    $("calLeakBefore").value = ""; $("calLeakAfter").value = "";
+    $("calCompBefore").value = ""; $("calCompAfter").value = "";
+    $("calImpreg").checked = false; $("calTemp").value = ""; $("calNote").value = "";
+    $("calJudge").value = "OK";
+
+    toast("보정 이력이 저장되었습니다");
+  }
+
+  function renderCalibList() {
+    var body = $("calibList");
+    var items = (cur().calib || []).slice().sort(function (a, b) {
+      return a.date < b.date ? 1 : a.date > b.date ? -1 : 0;   // 최신순
+    });
+
+    if (!items.length) {
+      body.innerHTML = '<p class="hint">아직 등록된 보정 이력이 없습니다.</p>';
+      return;
+    }
+
+    var h = '<h4 class="sub">보정 이력 (' + items.length + '건)</h4>' +
+      '<div class="btn-row" style="margin-bottom:10px;"><button class="btn sub" id="calibCsvBtn" type="button">보정 이력 CSV 내보내기</button></div>' +
+      '<div class="table-scroll"><table class="hist"><tr>' +
+      '<th>일자</th><th>샘플</th><th>리크값<br>전→후</th><th>comp value<br>전→후</th>' +
+      '<th>함침</th><th class="temp-h">온도</th><th>판정</th><th>확인자</th><th class="note-h">비고</th><th class="act">—</th></tr>';
+
+    items.forEach(function (it) {
+      h += "<tr>";
+      h += "<td>" + esc(it.date) + "</td>";
+      h += "<td>" + esc(it.sampleName) + "</td>";
+      h += "<td>" + esc(fmt(it.leakBefore)) + " → " + esc(fmt(it.leakAfter)) + "</td>";
+      h += "<td>" + esc(fmt(it.compBefore)) + " → " + esc(fmt(it.compAfter)) + "</td>";
+      h += "<td>" + (it.impregnated ? "Y" : "—") + "</td>";
+      h += "<td>" + (it.temp === null || it.temp === undefined ? "" : esc(fmt(it.temp) + "℃")) + "</td>";
+      h += '<td class="v' + (it.judge === "NG" ? " ng" : "") + '">' + esc(it.judge || "—") + "</td>";
+      h += "<td>" + esc(it.by || "") + "</td>";
+      h += '<td class="note">' + esc(it.note || "") + "</td>";
+      h += '<td class="act"><button class="mini" data-del-calib="' + esc(it.id) + '">삭제</button></td>';
+      h += "</tr>";
+    });
+    h += "</table></div>";
+    body.innerHTML = h;
+
+    $("calibCsvBtn").addEventListener("click", function () { exportCalibCsv(items); });
+
+    body.querySelectorAll("[data-del-calib]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-del-calib");
+        var item = null, list = cur().calib;
+        for (var i = 0; i < list.length; i++) if (list[i].id === id) item = list[i];
+        if (!item) return;
+        if (!confirm(item.date + " " + item.sampleName + " 보정 이력을 삭제할까요?\n삭제하면 되돌릴 수 없습니다.")) return;
+        cur().calib = list.filter(function (x) { return x.id !== id; });
+        save();
+        renderCalibList();
+        afterWrite(syncOn() ? sync.deleteCalib(eqId, item) : null);
+        toast("삭제되었습니다");
+      });
+    });
+  }
+
+  function exportCalibCsv(items) {
+    if (!items.length) { toast("내보낼 보정 이력이 없습니다"); return; }
+    var rows = [["공정No.", "일자", "샘플명", "리크값-전(" + UNIT + ")", "리크값-후(" + UNIT + ")",
+                 "함침여부", "compValue-전", "compValue-후", "설비주변온도(℃)", "판정", "확인자", "비고"]];
+    items.forEach(function (it) {
+      rows.push([eqId, it.date, it.sampleName, fmt(it.leakBefore), fmt(it.leakAfter),
+                 it.impregnated ? "Y" : "", fmt(it.compBefore), fmt(it.compAfter),
+                 it.temp === null || it.temp === undefined ? "" : fmt(it.temp), it.judge || "", it.by || "", it.note || ""]);
+    });
+    var csv = "﻿" + rows.map(function (r) { return r.map(csvCell).join(","); }).join("\r\n");
+    download("보정이력_공정No" + eqId + "_" + todayStr() + ".csv", csv, "text/csv");
+    toast("CSV 파일을 내보냈습니다");
+  }
+
+  /* =========================================================================
+     ⑥ 백업 · 내보내기
      ========================================================================= */
   function download(filename, text, mime) {
     var blob = new Blob([text], { type: mime + ";charset=utf-8" });
@@ -1852,7 +2111,7 @@
 
   function refreshSyncBar() {
     if (!syncOn()) {
-      setSync("warn", "이 폰에만 저장됨 — ⑤에서 구글시트 연동");
+      setSync("warn", "이 폰에만 저장됨 — ⑥에서 구글시트 연동");
       return;
     }
     var q = sync.queueSize();
@@ -1869,7 +2128,7 @@
 
     if (data.samples && data.samples.length) {
       e.samples = data.samples.map(function (s) {
-        return { id: s.id, name: s.name, type: s.type === "NG" ? "NG" : "OK",
+        return { id: s.id, name: s.name, qrNo: s.qrNo || "", type: s.type === "NG" ? "NG" : "OK",
                  nominal: s.nominal, lsl: s.lsl, usl: s.usl,
                  retired: !!s.retired, retiredAt: s.retiredAt || null };
       });
@@ -1877,6 +2136,10 @@
 
     e.recs = e.recs.filter(function (r) { return r.date.slice(0, 7) !== ymAt; })
                    .concat(data.recs || []);
+
+    // 보정 이력은 드문 이벤트라 pull()이 항상 전체를 돌려준다 — 통째로 교체해도 안전
+    if (data.calib) e.calib = data.calib;
+
     save();
     return true;
   }
@@ -2020,11 +2283,14 @@
     { q: "인터넷이 안 될 때도 입력할 수 있나요?", keywords: "오프라인 인터넷 전파 안됨",
       a: "네. 값은 항상 이 폰에 먼저 저장되고, 통신이 되면 자동으로 서버에 전송됩니다. 전파가 안 터져도 입력은 그대로 됩니다." },
     { q: "CSV나 백업 파일은 어떻게 받나요?", keywords: "csv 엑셀 다운로드 백업 내보내기 관리자",
-      a: "⑤데이터 · 연동 설정에서 [CSV 내보내기](엑셀용) 또는 [전체 백업 파일](이 폰의 전체 기록, 나중에 복원 가능)을 받을 수 있습니다.",
+      a: "⑥데이터 · 연동 설정에서 [CSV 내보내기](엑셀용) 또는 [전체 백업 파일](이 폰의 전체 기록, 나중에 복원 가능)을 받을 수 있습니다.",
       goto: "secData", admin: true },
     { q: "구글시트 연동은 어떻게 설정하나요?", keywords: "구글시트 연동 설정 처음 apps script",
-      a: "⑤데이터 · 연동 설정에서 안내를 볼 수 있고, 자세한 절차는 저장소의 구글시트_연동_설정방법.md 문서를 참고하세요. 최초 설정은 구글 계정 소유자가 한 번만 하면 됩니다.",
+      a: "⑥데이터 · 연동 설정에서 안내를 볼 수 있고, 자세한 절차는 저장소의 구글시트_연동_설정방법.md 문서를 참고하세요. 최초 설정은 구글 계정 소유자가 한 번만 하면 됩니다.",
       goto: "secData", admin: true },
+    { q: "디텍터 보정 이력은 어디서 관리하나요?", keywords: "보정이력 캘리브레이션 디텍터 fixed comp value 함침 관리자",
+      a: "⑤디텍터 보정 이력에서 관리합니다. 일반 접속 암호와는 별도의 암호가 한 번 더 필요합니다 — 설비 내부 파라미터를 다루는 민감한 데이터라 관리자만 열람·입력할 수 있게 했습니다.",
+      goto: "secCalib", admin: true },
     { q: "접속 비밀번호를 바꾸고 싶어요", keywords: "비밀번호 암호 변경 관리자",
       a: "화면에서는 바꿀 수 없고, gate.js 파일을 코드에서 직접 수정해야 합니다. PROJECT_OVERVIEW.md에 방법이 적혀 있으니 담당 개발자나 후공정 생산기술팀에 문의하세요.",
       admin: true },
@@ -2039,22 +2305,86 @@
       admin: true }
   ];
 
+  // 단어 단위로 겹치는 정도를 점수화한다. 예전에는 "입력한 문장 전체가 그대로
+  // 포함되는가"만 봤는데, 그러면 "OK 마스터 트렌드 분석해줘"처럼 자연스러운
+  // 문장은 그 문장 그대로를 담은 FAQ가 없는 한 항상 0건이 나왔다(개선이력.md 참고).
   function searchFaq(query) {
     var q = query.trim().toLowerCase();
     if (!q) return FAQ;
-    return FAQ.filter(function (f) {
-      return (f.q + " " + f.keywords + " " + f.a).toLowerCase().indexOf(q) >= 0;
-    });
+    var tokens = q.split(/[\s,.!?~/·]+/).filter(function (t) { return t.length > 0; });
+    if (!tokens.length) return FAQ;
+    var scored = FAQ.map(function (f) {
+      var hay = (f.q + " " + f.keywords + " " + f.a).toLowerCase();
+      var score = 0;
+      tokens.forEach(function (t) { if (hay.indexOf(t) >= 0) score++; });
+      return { f: f, score: score };
+    }).filter(function (x) { return x.score > 0; });
+    scored.sort(function (a, b) { return b.score - a.score; });
+    return scored.map(function (x) { return x.f; });
+  }
+
+  // "OK 마스터 트렌드 분석해줘"처럼 특정 샘플의 분석을 직접 요청하는 문장이면,
+  // FAQ를 찾아 주는 대신 그 샘플의 실제 데이터로 §4-5의 추이 탐지를 그 자리에서
+  // 돌려서 진짜 결과를 보여준다. "무엇이든 답하는 AI"는 아니지만, 미리 만든
+  // 문서를 찾아 주는 것보다 한 걸음 더 나아간 것 — 이미 구현된 통계 계산을
+  // 재사용하는 것뿐이라 비용이 들지 않는다.
+  var HELP_ANALYSIS_WORDS = ["트렌드", "분석", "추이", "이상", "신호", "어때", "괜찮", "상태"];
+
+  function matchLiveAnalysis(query) {
+    var q = query.trim();
+    if (!q) return null;
+    var hasIntent = HELP_ANALYSIS_WORDS.some(function (w) { return q.indexOf(w) >= 0; });
+    if (!hasIntent) return null;
+    var samples = cur().samples;
+    for (var i = 0; i < samples.length; i++) {
+      if (samples[i].name && q.indexOf(samples[i].name) >= 0) return samples[i];
+    }
+    return null;
+  }
+
+  function renderLiveAnalysis(s) {
+    var points = sampleHistory(s);
+    var body;
+    if (!points.length) {
+      body = '<div class="help-live-body">아직 "' + esc(s.name) + '"으로 기록된 값이 없습니다.</div>';
+    } else {
+      var findings = detectTrend(points);
+      if (!findings.length) {
+        body = '<div class="help-live-body">전체 ' + points.length + '회 기록을 확인한 결과, 지금은 특별한 이상 신호가 없습니다. 안정적인 상태입니다.</div>';
+      } else {
+        body = findings.map(function (f) {
+          var causes = CAUSE_HINTS[f.key] || [];
+          return '<div class="help-live-finding">' +
+            '<div class="trend-title">' + esc(f.title) + '</div>' +
+            '<div class="trend-plain">' + esc(f.plain) + '</div>' +
+            '<div class="trend-detail">근거: ' + esc(f.detail) + '</div>' +
+            (causes.length
+              ? '<div class="trend-causes"><span class="k">흔히 보는 원인(참고용)</span><ul>' +
+                causes.map(function (c) { return "<li>" + esc(c) + "</li>"; }).join("") + "</ul></div>"
+              : "") +
+            "</div>";
+        }).join("");
+      }
+      body += '<button type="button" class="goto" data-live-goto="' + esc(s.id) + '">전체 이력 보기로 이동</button>';
+    }
+    return '<div class="help-live">' +
+      '<div class="help-live-head">📈 "' + esc(s.name) + '" 실시간 분석 결과</div>' +
+      body +
+      "</div>";
   }
 
   function renderHelpList(query) {
     var list = $("helpList");
+    var live = matchLiveAnalysis(query || "");
+    var liveHtml = live ? renderLiveAnalysis(live) : "";
     var results = searchFaq(query || "");
-    if (!results.length) {
+
+    if (!live && !results.length) {
       list.innerHTML = '<div class="help-empty">일치하는 답을 못 찾았습니다.<br>문의는 후공정 생산기술팀으로 부탁드립니다.</div>';
       return;
     }
-    list.innerHTML = results.map(function (f, i) {
+
+    var itemsHtml = results.map(function (f, i) {
       return '<div class="help-item">' +
         '<button type="button" class="help-q" data-i="' + i + '">' +
           (f.admin ? '<span class="tag admin">관리자</span>' : '<span class="tag">작업자</span>') +
@@ -2067,6 +2397,7 @@
         "</div>" +
         "</div>";
     }).join("");
+    list.innerHTML = liveHtml + itemsHtml;
 
     results.forEach(function (f, i) {
       var btn = list.querySelector('.help-q[data-i="' + i + '"]');
@@ -2088,6 +2419,13 @@
         setTimeout(function () {
           sec.scrollIntoView({ behavior: "smooth", block: "start" });
         }, 50);
+      });
+    });
+    list.querySelectorAll("[data-live-goto]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var sid = btn.getAttribute("data-live-goto");
+        closeHelp();
+        openHistory(sid);
       });
     });
   }
@@ -2141,6 +2479,7 @@
     renderChart();
     renderList();
     renderSpec();
+    renderCalibGate();
     renderDataStat();
     renderSyncSetup();
     refreshSyncBar();
@@ -2183,6 +2522,9 @@
       if (e.target.files && e.target.files[0]) importBackup(e.target.files[0]);
       e.target.value = "";
     });
+
+    $("calibGateBtn").addEventListener("click", tryCalibUnlock);
+    $("calibPw").addEventListener("keydown", function (e) { if (e.key === "Enter") tryCalibUnlock(); });
 
     initHelp();
 

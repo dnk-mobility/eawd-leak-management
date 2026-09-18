@@ -27,12 +27,18 @@ var TOKEN = 'dnk-leak-2026';
 
 var SHEET_RECS = '기록';
 var SHEET_SAMPLES = '마스터샘플';
+var SHEET_CALIB = '보정이력';
 
 var REC_HEAD = ['공정No.', '일자', '교대', '기록ID', '샘플ID', '샘플명', '구분',
                 '누설값', '고유지정값', '하한값', '상한값', '판정',
                 '설비주변온도', '확인자', '비고', '수정시각'];
 var SAM_HEAD = ['공정No.', '샘플ID', '샘플명', '구분', '고유지정값', '하한값', '상한값',
-                '수정시각', '삭제', '폐기여부', '폐기일자'];
+                '수정시각', '삭제', '폐기여부', '폐기일자', 'QR코드번호'];
+// QR 정보관리 시스템에서 이관된 "마스터 샘플·보정 이력" — 디텍터(LS-R700)
+// 보정 작업의 전/후 값을 누적 기록. 2026-09-19 이관(인계_마스터샘플_보정이력.md 참고).
+var CALIB_HEAD = ['공정No.', '기록ID', '일자', '샘플ID', '샘플명',
+                  '리크값-전', '리크값-후', '함침여부', 'compValue-전', 'compValue-후',
+                  '설비주변온도', '판정', '확인자', '비고', '수정시각'];
 
 /* =========================================================================
    진입점
@@ -58,6 +64,9 @@ function handle(e) {
         break;
       case 'samples':
         out = { ok: true, data: saveSamples(JSON.parse(p.data)) };
+        break;
+      case 'calibPush':
+        out = { ok: true, data: pushCalib(JSON.parse(p.data)) };
         break;
       case 'wipe':
         out = { ok: true, data: wipe(String(p.eq || '')) };
@@ -103,6 +112,7 @@ function sheet(name, head) {
 
 function recSheet() { return sheet(SHEET_RECS, REC_HEAD); }
 function samSheet() { return sheet(SHEET_SAMPLES, SAM_HEAD); }
+function calibSheet() { return sheet(SHEET_CALIB, CALIB_HEAD); }
 
 function nowStr() {
   return Utilities.formatDate(new Date(), 'Asia/Seoul', "yyyy-MM-dd'T'HH:mm:ss");
@@ -140,7 +150,7 @@ function safeText(v) {
    ========================================================================= */
 
 function pull(eq, ym) {
-  var out = { eq: eq, ym: ym, samples: [], recs: [], time: nowStr() };
+  var out = { eq: eq, ym: ym, samples: [], recs: [], calib: [], time: nowStr() };
   if (!eq) throw new Error('공정No.가 비어 있습니다');
 
   // --- 마스터 샘플 정의 ---
@@ -153,7 +163,8 @@ function pull(eq, ym) {
     out.samples.push({
       id: asText(r[1]), name: asText(r[2]), type: asText(r[3]) === 'NG' ? 'NG' : 'OK',
       nominal: asNum(r[4]), lsl: asNum(r[5]), usl: asNum(r[6]),
-      retired: asText(r[9]) === 'Y', retiredAt: asText(r[10]) || null
+      retired: asText(r[9]) === 'Y', retiredAt: asText(r[10]) || null,
+      qrNo: asText(r[11]) || null
     });
   }
 
@@ -184,6 +195,20 @@ function pull(eq, ym) {
     });
   }
   for (var k = 0; k < order.length; k++) out.recs.push(byId[order[k]]);
+
+  // --- 보정 이력 (드문 이벤트라 ym으로 거르지 않고 항상 전체를 돌려준다) ---
+  var cal = calibSheet();
+  var cvals = cal.getDataRange().getValues();
+  for (var m = 1; m < cvals.length; m++) {
+    var cv = cvals[m];
+    if (asText(cv[0]) !== eq) continue;
+    out.calib.push({
+      id: asText(cv[1]), date: asText(cv[2]), sid: asText(cv[3]), sampleName: asText(cv[4]),
+      leakBefore: asNum(cv[5]), leakAfter: asNum(cv[6]), impregnated: asText(cv[7]) === 'Y',
+      compBefore: asNum(cv[8]), compAfter: asNum(cv[9]), temp: asNum(cv[10]),
+      judge: asText(cv[11]) || '-', by: asText(cv[12]), note: asText(cv[13]), ts: asText(cv[14])
+    });
+  }
 
   return out;
 }
@@ -253,12 +278,48 @@ function saveSamples(payload) {
     var rows = samples.map(function (s) {
       return [safeText(eq), safeText(s.id), safeText(s.name), safeText(s.type),
               asNum(s.nominal), asNum(s.lsl), asNum(s.usl), ts, '',
-              s.retired ? 'Y' : '', s.retiredAt ? safeText(s.retiredAt) : ''];
+              s.retired ? 'Y' : '', s.retiredAt ? safeText(s.retiredAt) : '',
+              s.qrNo ? safeText(s.qrNo) : ''];
     });
     if (rows.length) {
       sh.getRange(sh.getLastRow() + 1, 1, rows.length, SAM_HEAD.length).setValues(rows);
     }
     return { saved: rows.length, ts: ts };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/* =========================================================================
+   쓰기 — 보정 이력 1건 추가 / 삭제 (QR 정보관리 시스템에서 이관, 2026-09-19)
+   payload = { eq, item:{id,date,sid,sampleName,leakBefore,leakAfter,impregnated,
+                          compBefore,compAfter,temp,judge,by,note}, deleted:true? }
+   수정(덮어쓰기) 없이 추가·삭제만 지원한다 — 원본 설계가 "누적 이력"이었고,
+   같은 날 같은 샘플을 두 번 보정하는 경우도 있어 (일자+샘플) 같은 자연키로
+   묶을 수 없기 때문이다. 잘못 입력했으면 삭제 후 다시 추가한다.
+   ========================================================================= */
+
+function pushCalib(payload) {
+  var eq = String(payload.eq || '');
+  var item = payload.item || {};
+  if (!eq) throw new Error('공정No.가 비어 있습니다');
+  if (!item.id) throw new Error('기록ID가 비어 있습니다');
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sh = calibSheet();
+    removeRows(sh, function (v) { return asText(v[0]) === eq && asText(v[1]) === asText(item.id); });
+
+    if (payload.deleted) return { deleted: true };
+
+    var ts = nowStr();
+    var row = [safeText(eq), safeText(item.id), safeText(item.date), safeText(item.sid), safeText(item.sampleName),
+               asNum(item.leakBefore), asNum(item.leakAfter), item.impregnated ? 'Y' : '',
+               asNum(item.compBefore), asNum(item.compAfter), asNum(item.temp), safeText(item.judge),
+               safeText(item.by), safeText(item.note), ts];
+    sh.getRange(sh.getLastRow() + 1, 1, 1, CALIB_HEAD.length).setValues([row]);
+    return { saved: true, ts: ts };
   } finally {
     lock.releaseLock();
   }
