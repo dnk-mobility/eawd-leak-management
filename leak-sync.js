@@ -205,6 +205,12 @@
       { action: "calibPush", data: JSON.stringify({ eq: eq, item: item, deleted: true }) });
   }
 
+  // 앱 전체 설정 (설비 구분 없음) — 모든 폰이 같은 상태를 보게 하는 값
+  function setSetting(key, value) {
+    return send("setting:" + key,
+      { action: "setting", data: JSON.stringify({ key: key, value: value }) });
+  }
+
   window.dnkSync = {
     enabled: enabled,
     urlIsFixed: urlIsFixed,
@@ -217,6 +223,7 @@
     pushSamples: pushSamples,
     pushCalib: pushCalib,
     deleteCalib: deleteCalib,
+    setSetting: setSetting,
     wipe: wipe,
     queueSize: queueSize,
     flush: flush

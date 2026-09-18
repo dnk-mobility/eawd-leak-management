@@ -28,6 +28,7 @@ var TOKEN = 'dnk-leak-2026';
 var SHEET_RECS = '기록';
 var SHEET_SAMPLES = '마스터샘플';
 var SHEET_CALIB = '보정이력';
+var SHEET_SETTINGS = '설정';
 
 var REC_HEAD = ['공정No.', '일자', '교대', '기록ID', '샘플ID', '샘플명', '구분',
                 '누설값', '고유지정값', '하한값', '상한값', '판정',
@@ -39,6 +40,9 @@ var SAM_HEAD = ['공정No.', '샘플ID', '샘플명', '구분', '고유지정값
 var CALIB_HEAD = ['공정No.', '기록ID', '일자', '샘플ID', '샘플명',
                   '리크값-전', '리크값-후', '함침여부', 'compValue-전', 'compValue-후',
                   '설비주변온도', '판정', '확인자', '비고', '수정시각'];
+// 설비와 무관하게 앱 전체에 적용되는 설정(현재는 "기타사항 잠금" 하나).
+// 모든 폰이 같은 상태를 보게 하려고 시트에 둔다 — pull() 응답에 항상 함께 실린다.
+var SET_HEAD = ['키', '값', '수정시각'];
 
 /* =========================================================================
    진입점
@@ -67,6 +71,9 @@ function handle(e) {
         break;
       case 'calibPush':
         out = { ok: true, data: pushCalib(JSON.parse(p.data)) };
+        break;
+      case 'setting':
+        out = { ok: true, data: saveSetting(JSON.parse(p.data)) };
         break;
       case 'wipe':
         out = { ok: true, data: wipe(String(p.eq || '')) };
@@ -113,6 +120,18 @@ function sheet(name, head) {
 function recSheet() { return sheet(SHEET_RECS, REC_HEAD); }
 function samSheet() { return sheet(SHEET_SAMPLES, SAM_HEAD); }
 function calibSheet() { return sheet(SHEET_CALIB, CALIB_HEAD); }
+function setSheet() { return sheet(SHEET_SETTINGS, SET_HEAD); }
+
+/** 앱 전체 설정을 { 키: 값 } 형태로 읽어 온다 */
+function getSettings() {
+  var vals = setSheet().getDataRange().getValues();
+  var out = {};
+  for (var i = 1; i < vals.length; i++) {
+    var k = asText(vals[i][0]);
+    if (k) out[k] = asText(vals[i][1]);
+  }
+  return out;
+}
 
 function nowStr() {
   return Utilities.formatDate(new Date(), 'Asia/Seoul', "yyyy-MM-dd'T'HH:mm:ss");
@@ -150,8 +169,10 @@ function safeText(v) {
    ========================================================================= */
 
 function pull(eq, ym) {
-  var out = { eq: eq, ym: ym, samples: [], recs: [], calib: [], time: nowStr() };
+  var out = { eq: eq, ym: ym, samples: [], recs: [], calib: [], settings: {}, time: nowStr() };
   if (!eq) throw new Error('공정No.가 비어 있습니다');
+
+  out.settings = getSettings();   // 설비와 무관한 앱 전체 설정 (잠금 상태 등)
 
   // --- 마스터 샘플 정의 ---
   var sam = samSheet();
@@ -320,6 +341,28 @@ function pushCalib(payload) {
                safeText(item.by), safeText(item.note), ts];
     sh.getRange(sh.getLastRow() + 1, 1, 1, CALIB_HEAD.length).setValues([row]);
     return { saved: true, ts: ts };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/* =========================================================================
+   쓰기 — 앱 전체 설정 1건 (키 하나당 행 하나, 있으면 교체)
+   payload = { key, value }
+   ========================================================================= */
+
+function saveSetting(payload) {
+  var key = String(payload.key || '');
+  if (!key) throw new Error('설정 키가 비어 있습니다');
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sh = setSheet();
+    removeRows(sh, function (v) { return asText(v[0]) === key; });
+    sh.getRange(sh.getLastRow() + 1, 1, 1, SET_HEAD.length)
+      .setValues([[safeText(key), safeText(payload.value), nowStr()]]);
+    return { saved: true, key: key };
   } finally {
     lock.releaseLock();
   }

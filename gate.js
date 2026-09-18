@@ -132,6 +132,11 @@
     ready: new Promise(function (res) {
       resolveReady = res;
     }),
+    // index.html의 "기타사항 잠금"이 같은 암호를 쓴다 — 해시를 복사해 두면 암호를
+    // 바꿀 때 한쪽만 바뀌는 사고가 나므로, 여기서 넘겨준다(값 자체는 해시라 노출돼도
+    // 게이트에 이미 들어있는 것과 같은 수준이다).
+    passHash: PASS_HASH,
+    sha256Hex: sha256Hex,
   };
 
   function reveal() {

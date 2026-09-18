@@ -381,17 +381,31 @@
   </details>
 
   <details class="section" id="secCalib">
-    <summary><span class="num">⑤</span>디텍터 보정 이력<span class="chev">▾</span></summary>
+    <summary><span class="num">⑤</span><span id="calibTitle">디텍터 보정 이력</span><span class="chev">▾</span></summary>
     <div class="body">
-      <div id="calibGate">
-        <p class="hint" style="margin:0 0 12px;">마스터 샘플로 디텍터(LS-R700)를 점검하고 Fixed comp value를 수정한 이력입니다. 설비 내부 파라미터를 다루므로 <b>별도 암호</b>가 필요합니다.</p>
-        <div class="fld"><label>보정 이력 열람 암호</label>
-          <input type="password" id="calibPw" placeholder="암호 입력" autocomplete="off">
+      <div id="calibHiddenView" hidden>
+        <p class="hint" style="margin:0 0 12px;">이 항목은 잠겨 있습니다. 내용을 보려면 <b>접속 암호</b>를 입력하세요.</p>
+        <div class="fld"><label>접속 암호</label>
+          <input type="password" id="calibUnlockPw" placeholder="암호 입력" autocomplete="off">
         </div>
-        <button class="btn sub" id="calibGateBtn" type="button">확인</button>
-        <p class="hint" id="calibGateErr" style="color:var(--warn-text);"></p>
+        <button class="btn sub" id="calibUnlockBtn" type="button">잠금 해제</button>
+        <p class="hint" id="calibUnlockErr" style="color:var(--warn-text);"></p>
       </div>
-      <div id="calibContent" hidden></div>
+
+      <div id="calibOpenView">
+        <p class="hint" style="margin:0 0 10px;">마스터 샘플로 디텍터(LS-R700)를 점검하고 Fixed comp value를 수정한 이력입니다. <b>보는 것은 누구나</b> 가능하고, <b>입력·삭제는 관리자만</b> 할 수 있습니다.</p>
+        <div id="calibList"></div>
+        <div id="calibEditGate" style="margin-top:14px;">
+          <div class="fld"><label>관리자 암호 (입력·삭제용)</label>
+            <input type="password" id="calibPw" placeholder="암호 입력" autocomplete="off">
+          </div>
+          <button class="btn sub" id="calibGateBtn" type="button">관리자 모드로 전환</button>
+          <p class="hint" id="calibGateErr" style="color:var(--warn-text);"></p>
+        </div>
+        <div id="calibEditor" hidden></div>
+        <button class="btn sub" id="calibLockBtn" type="button" style="margin-top:14px;">「기타사항」으로 잠그기</button>
+        <p class="hint">잠그면 제목이 "기타사항"으로 바뀌고 내용이 감춰집니다. <b>모든 사람의 화면에 함께 적용</b>되며, 접속 암호로 다시 열 수 있습니다.</p>
+      </div>
     </div>
   </details>
 
@@ -530,6 +544,8 @@
       try { db = JSON.parse(raw); } catch (e) { db = null; }
     }
     if (!db || typeof db !== "object" || !db.eq) db = { v: 1, eq: {} };
+    // 설비와 무관하게 앱 전체에 적용되는 설정 (현재는 "기타사항 잠금" 하나)
+    if (!db.settings || typeof db.settings !== "object") db.settings = {};
     EQ_IDS.forEach(function (id) {
       if (!db.eq[id]) db.eq[id] = blankEq(id);
       if (!Array.isArray(db.eq[id].samples)) db.eq[id].samples = [];
@@ -1570,6 +1586,7 @@
         }
         e.recs = data.recs || [];                  // 전 기간을 받았으므로 통째로 바꿔도 안전
         if (data.calib) e.calib = data.calib;
+        if (data.settings) db.settings = data.settings;
         save();
         return "server";
       });
@@ -1714,12 +1731,13 @@
        마스터 샘플을 그대로 고른다(드롭다운, 오타 방지).
      - "판정"을 완전 수동 입력 대신, 리크값-후를 선택한 샘플의 스펙(하한·상한)과
        비교해 자동으로 제안한다(그래도 최종 확인은 사람이 함 — 강제 아님).
-     - 접근 제한: 관리자 한 명만 입력·열람하게 해 달라는 요청에 따라, 일반 접속
-       암호와는 별개의 2차 암호를 둔다. 이 암호를 아는 사람만 이 섹션에 들어올 수
-       있으므로, 그 대상을 관리자 한 명으로 좁히면 사실상 그 사람만 쓸 수 있다.
-       QR 시스템의 2차 암호(data-lock="2")와 같은 발상이지만 sessionStorage를
-       쓴다 — 1차 암호(이 폰에서 평생 1회)보다 더 자주 재확인되어야 하는
-       데이터라고 판단해서다(탭을 닫으면 다시 물어봄).
+     - 접근 제한(2026-09-19 조정): 처음에는 섹션 전체를 2차 암호로 잠갔는데,
+       "평소에는 누구나 확인 가능하고 수정만 관리자 한 사람"으로 요건이 바뀌어
+       읽기/쓰기를 분리했다. 이력 표는 잠금과 무관하게 항상 보이고, 입력 폼과
+       삭제 버튼만 2차 암호(관리자 전용)로 잠근다. 계정 체계가 없는 구조라
+       "특정 한 사람만 수정"은 그 사람만 아는 암호로 구현할 수밖에 없다.
+       sessionStorage를 쓴다 — 1차 암호(이 폰에서 평생 1회)보다 더 자주
+       재확인되어야 하는 권한이라고 판단해서다(탭을 닫으면 다시 물어봄).
      - "수정(덮어쓰기)"은 지원하지 않는다 — 원본 설계가 "새 이력은 맨 아래에
        계속 추가"였고, 같은 날 같은 샘플을 두 번 보정하는 일도 있어 자연키로
        묶을 수 없다. 잘못 입력했으면 삭제 후 다시 추가한다.
@@ -1762,20 +1780,71 @@
     });
   }
 
+  /* ---- 「기타사항」 잠금 (전체 공유) ---------------------------------------
+     섹션을 통째로 감추고 제목만 "기타사항"으로 바꾸는 기능. 남이 폰을 봤을 때
+     이 섹션이 무엇인지 드러나지 않게 하는 용도다.
+     - 상태는 db.settings.calibHidden 에 두고 구글시트("설정" 시트)로 공유한다 —
+       한 사람이 잠그면 모든 폰에서 같이 잠긴다(요청 사항).
+     - 잠금 해제 암호는 **게이트(접속) 암호와 동일**하다. 작업자 모두가 아는
+       암호이므로 이건 "외부인에게 안 보이게" 하는 수준이지, 내부 권한 구분이
+       아니다 — 내부 권한 구분은 위의 관리자 암호(입력·삭제)가 담당한다.
+     -------------------------------------------------------------------------- */
+  function calibHidden() { return db.settings && db.settings.calibHidden === "Y"; }
+
+  function setCalibHidden(on) {
+    db.settings.calibHidden = on ? "Y" : "";
+    save();
+    renderCalibGate();
+    afterWrite(syncOn() ? sync.setSetting("calibHidden", on ? "Y" : "") : null);
+  }
+
+  function tryCalibReveal() {
+    var gate = window.dnkGate;
+    if (!gate || !gate.sha256Hex || !gate.passHash) {
+      $("calibUnlockErr").textContent = "게이트 정보를 읽지 못했습니다. 새로고침 후 다시 시도하세요.";
+      return;
+    }
+    gate.sha256Hex($("calibUnlockPw").value).then(function (hex) {
+      if (hex === gate.passHash) {
+        $("calibUnlockPw").value = "";
+        $("calibUnlockErr").textContent = "";
+        setCalibHidden(false);
+        toast("잠금을 해제했습니다");
+      } else {
+        $("calibUnlockErr").textContent = "암호가 올바르지 않습니다";
+        $("calibUnlockPw").value = "";
+        $("calibUnlockPw").focus();
+      }
+    });
+  }
+
+  // 이력 표는 누구나 볼 수 있고, 입력 폼·삭제 버튼만 관리자 암호로 잠근다.
   function renderCalibGate() {
+    var hidden = calibHidden();
+    $("calibTitle").textContent = hidden ? "기타사항" : "디텍터 보정 이력";
+    $("calibHiddenView").hidden = !hidden;
+    $("calibOpenView").hidden = hidden;
+    if (hidden) {
+      // 감춰진 상태에서는 표 내용을 DOM에서도 비워 둔다 — 숨김 처리만 해 두면
+      // 이전에 그려진 내용이 그대로 남아 있어 감추는 의미가 옅어진다.
+      $("calibList").innerHTML = "";
+      $("calibEditor").innerHTML = "";
+      return;
+    }
+
     var unlocked = calibUnlocked();
-    $("calibGate").hidden = unlocked;
-    $("calibContent").hidden = !unlocked;
+    renderCalibList();                       // 표는 관리자 잠금과 무관하게 항상 그린다
+    $("calibEditGate").hidden = unlocked;
+    $("calibEditor").hidden = !unlocked;
     if (unlocked) renderCalib();
   }
 
   function renderCalib() {
-    var box = $("calibContent");
+    var box = $("calibEditor");
     var samples = cur().samples;
 
     if (!samples.length) {
-      box.innerHTML = '<p class="hint">먼저 ④마스터 샘플 · 스펙 관리에서 샘플을 등록하세요.</p><div id="calibList"></div>';
-      renderCalibList();
+      box.innerHTML = '<p class="hint">먼저 ④마스터 샘플 · 스펙 관리에서 샘플을 등록하세요.</p>';
       return;
     }
 
@@ -1805,8 +1874,7 @@
         '<input type="checkbox" id="calImpreg" style="width:auto;">재함침 처리함</label></div>' +
       '<div class="fld"><label>확인자</label><input type="text" id="calBy" placeholder="이름 입력" autocomplete="off"></div>' +
       '<div class="fld"><label>비고</label><input type="text" id="calNote" placeholder="특이사항 (선택)" autocomplete="off"></div>' +
-      '<button class="btn" id="calSaveBtn" type="button">보정 이력 저장</button>' +
-      '<div id="calibList" style="margin-top:16px;"></div>';
+      '<button class="btn" id="calSaveBtn" type="button">보정 이력 저장</button>';
 
     // 리크값-후를 입력하면 선택한 샘플의 스펙 기준으로 판정을 자동 제안한다
     // (최종 확인은 사람이 함 — 자동 확정이 아니라 드롭다운 값을 미리 맞춰 두는 것뿐)
@@ -1821,8 +1889,6 @@
     try { $("calBy").value = localStorage.getItem(USER_KEY) || ""; } catch (e) {}
 
     $("calSaveBtn").addEventListener("click", doSaveCalib);
-
-    renderCalibList();
   }
 
   function doSaveCalib() {
@@ -1869,11 +1935,15 @@
       return;
     }
 
+    // 삭제 버튼은 관리자 모드일 때만 — 조회는 누구나, 수정은 관리자만
+    var canEdit = calibUnlocked();
+
     var h = '<h4 class="sub">보정 이력 (' + items.length + '건)</h4>' +
       '<div class="btn-row" style="margin-bottom:10px;"><button class="btn sub" id="calibCsvBtn" type="button">보정 이력 CSV 내보내기</button></div>' +
       '<div class="table-scroll"><table class="hist"><tr>' +
       '<th>일자</th><th>샘플</th><th>리크값<br>전→후</th><th>comp value<br>전→후</th>' +
-      '<th>함침</th><th class="temp-h">온도</th><th>판정</th><th>확인자</th><th class="note-h">비고</th><th class="act">—</th></tr>';
+      '<th>함침</th><th class="temp-h">온도</th><th>판정</th><th>확인자</th><th class="note-h">비고</th>' +
+      (canEdit ? '<th class="act">—</th>' : "") + "</tr>";
 
     items.forEach(function (it) {
       h += "<tr>";
@@ -1886,7 +1956,9 @@
       h += '<td class="v' + (it.judge === "NG" ? " ng" : "") + '">' + esc(it.judge || "—") + "</td>";
       h += "<td>" + esc(it.by || "") + "</td>";
       h += '<td class="note">' + esc(it.note || "") + "</td>";
-      h += '<td class="act"><button class="mini" data-del-calib="' + esc(it.id) + '">삭제</button></td>';
+      if (canEdit) {
+        h += '<td class="act"><button class="mini" data-del-calib="' + esc(it.id) + '">삭제</button></td>';
+      }
       h += "</tr>";
     });
     h += "</table></div>";
@@ -2139,6 +2211,8 @@
 
     // 보정 이력은 드문 이벤트라 pull()이 항상 전체를 돌려준다 — 통째로 교체해도 안전
     if (data.calib) e.calib = data.calib;
+    // 앱 전체 설정(잠금 상태 등)은 서버 값을 정답으로 본다 — 모든 폰이 같은 상태를 보게
+    if (data.settings) db.settings = data.settings;
 
     save();
     return true;
@@ -2525,6 +2599,14 @@
 
     $("calibGateBtn").addEventListener("click", tryCalibUnlock);
     $("calibPw").addEventListener("keydown", function (e) { if (e.key === "Enter") tryCalibUnlock(); });
+
+    $("calibLockBtn").addEventListener("click", function () {
+      if (!confirm('이 항목을 "기타사항"으로 잠글까요?\n모든 사람의 화면에서 함께 감춰지며, 접속 암호로 다시 열 수 있습니다.')) return;
+      setCalibHidden(true);
+      toast("기타사항으로 잠갔습니다");
+    });
+    $("calibUnlockBtn").addEventListener("click", tryCalibReveal);
+    $("calibUnlockPw").addEventListener("keydown", function (e) { if (e.key === "Enter") tryCalibReveal(); });
 
     initHelp();
 
