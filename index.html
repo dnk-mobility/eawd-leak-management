@@ -233,6 +233,19 @@
   }
   .toast.show{opacity:1;}
 
+  /* 맨 위로 이동 버튼 — 챗봇 버튼(#helpFab, z-index:300) 바로 위에 쌓아 겹치지
+     않게 하고, 스크롤이 어느 정도 내려갔을 때만 보이게 한다(JS의 toggleToTop). */
+  #toTopBtn{
+    position:fixed;right:16px;bottom:calc(16px + 52px + 12px + env(safe-area-inset-bottom,0px));
+    z-index:290;width:44px;height:44px;border-radius:50%;border:none;
+    background:var(--navy);color:#fff;font-size:16px;cursor:pointer;
+    box-shadow:0 4px 14px rgba(27,74,73,.3);display:flex;align-items:center;justify-content:center;
+    opacity:0;pointer-events:none;transition:opacity .2s ease;
+  }
+  #toTopBtn.show{opacity:1;pointer-events:auto;}
+  #toTopBtn:active{opacity:.85;}
+  @media (prefers-reduced-motion:reduce){ #toTopBtn{transition:none;} }
+
   /* 도움말 위젯 — 우측 하단 고정, 스크롤해도 같은 자리에 머문다(position:fixed) */
   #helpWrap{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:300;}
   #helpFab{
@@ -272,6 +285,7 @@
   }
   .help-list{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px 0;}
   .help-empty{padding:20px 14px;text-align:center;color:var(--gray-500);font-size:12.5px;}
+  .help-fuzzy-note{padding:10px 14px 4px;color:var(--gray-500);font-size:11.5px;}
   .help-item{border-bottom:1px solid var(--gray-100);}
   .help-q{
     width:100%;text-align:left;border:none;background:none;cursor:pointer;
@@ -446,8 +460,10 @@
           <p class="hint" id="calibGateErr" style="color:var(--warn-text);"></p>
         </div>
         <div id="calibEditor" hidden></div>
-        <button class="btn sub" id="calibLockBtn" type="button" style="margin-top:14px;">「기타사항」으로 잠그기</button>
-        <p class="hint">잠그면 제목이 "기타사항"으로 바뀌고 내용이 감춰집니다. <b>모든 사람의 화면에 함께 적용</b>되며, 접속 암호로 다시 열 수 있습니다.</p>
+        <div id="calibLockZone" hidden style="margin-top:14px;">
+          <button class="btn sub" id="calibLockBtn" type="button">「기타사항」으로 잠그기</button>
+          <p class="hint">잠그면 제목이 "기타사항"으로 바뀌고 내용이 감춰집니다. <b>모든 사람의 화면에 함께 적용</b>되며, 접속 암호로 다시 열 수 있습니다.</p>
+        </div>
       </div>
     </div>
   </details>
@@ -482,6 +498,8 @@
 </footer>
 
 <div class="toast" id="toast"></div>
+
+<button type="button" id="toTopBtn" aria-label="맨 위로 이동">▲</button>
 
 <div id="helpWrap">
   <button type="button" id="helpFab" aria-label="도움말 열기" aria-expanded="false">
@@ -1400,7 +1418,7 @@
     return '<div class="trend-note">' +
       '<div class="trend-head">⚠ 추이 이상 신호 ' + findings.length + '건</div>' +
       items +
-      '<p class="trend-foot">스펙(상·하한) 이탈과는 별개로, 이 샘플의 평소 패턴과 통계적으로 다른 움직임을 자동으로 잡아낸 것입니다(통계 계산 — AI 판단이 아닙니다). 실제 원인은 현장에서 확인하세요 — 위 원인 목록은 일반적으로 흔한 사례이며, 이 설비 특성에 맞게 다듬어 쓰는 것을 권장합니다.</p>' +
+      '<p class="trend-foot">스펙(상·하한) 이탈과는 별개로, 이 샘플의 평소 패턴과 통계적으로 다른 움직임을 자동으로 잡아낸 것입니다(통계 계산 — AI 판단이 아닙니다). 실제 원인은 현장에서 확인하세요 — 위 원인 목록은 일반적으로 흔한 사례이며, 이 설비 특성에 맞게 다듬어 쓰는 것을 권장합니다. 이 분석은 지금 보이는 주간·월간 기간과 무관하게 <b>이 샘플의 전체 기록</b>을 기준으로 계산합니다 — 위 날짜가 지금 그래프 기간 밖일 수 있습니다.</p>' +
       "</div>";
   }
 
@@ -1452,7 +1470,11 @@
         '<div class="ch-spec">' + esc(specText(s)) + ' · ' + points.length + '회 기록' +
           (s.retired ? ' · 폐기일 ' + esc(s.retiredAt) : '') + '</div>' +
         chart.svg +
-        renderTrendNote(points) +
+        // 추이 이상 신호는 지금 보이는 기간(주간/월간)이 아니라 이 샘플의 전체
+        // 기록으로 계산한다 — SPC 규칙 대부분이 최소 6~10개 데이터를 요구하는데,
+        // 주간 보기는 최대 7일치뿐이라 그 안에서만 보면 거의 항상 "신호 없음"으로
+        // 나와 사실상 무용지물이었다(개선이력.md 참고).
+        renderTrendNote(sampleHistory(s)) +
         '<div class="ch-legend">' +
           '<span><i style="background:#2f6e6c;"></i>누설값</span>' +
           '<span><i style="background:#b8453a;"></i>상·하한</span>' +
@@ -1954,6 +1976,10 @@
     renderCalibList();                       // 표는 관리자 잠금과 무관하게 항상 그린다
     $("calibEditGate").hidden = unlocked;
     $("calibEditor").hidden = !unlocked;
+    // 「기타사항」으로 잠그는 기능도 관리자 모드로 전환해야만 보인다(요청) — 예전엔
+    // 이 버튼이 누구나 누를 수 있는 자리에 따로 있었는데, 입력·수정과 같은 자리에
+    // 두고 관리자 암호를 통과해야 나오도록 옮겼다(개선이력.md 참고).
+    $("calibLockZone").hidden = !unlocked;
     if (unlocked) renderCalib();
   }
 
@@ -2526,6 +2552,42 @@
     return scored.map(function (x) { return x.f; });
   }
 
+  // searchFaq()는 토큰이 FAQ 텍스트에 "그대로" 들어있어야만 잡는다 — 오타나
+  // 낯선 표현("누설값이 왜 튀나요" 같은, FAQ 문구와 겹치는 단어가 하나도 없는
+  // 질문)이면 0건이 나와 그냥 막다른 화면만 보여줬다. 그러면 챗봇이 "입력해도
+  // 반응이 없다"는 인상을 준다는 지적을 받아, 정확히 일치하는 게 없을 때는
+  // 2글자 단위(bigram)로 겹치는 정도를 봐서 "그나마 비슷한" 질문을 추천한다.
+  function bigrams(s) {
+    var t = String(s || "").replace(/\s+/g, "");
+    var out = [];
+    for (var i = 0; i < t.length - 1; i++) out.push(t.slice(i, i + 2));
+    return out;
+  }
+  // 검색어(a) 쪽 기준으로 몇 %가 대상(b)에서 발견되는지를 본다 — max(A,B)로
+  // 나누면 FAQ의 keywords가 길수록(대상 문자열 b가 길수록) 점수가 낮아져,
+  // 검색어와 거의 그대로 겹치는 질문도 걸러지는 문제가 있었다(구현 중 자체 발견).
+  function bigramSimilarity(a, b) {
+    var A = bigrams(a), B = bigrams(b);
+    if (!A.length || !B.length) return 0;
+    var counts = {};
+    B.forEach(function (g) { counts[g] = (counts[g] || 0) + 1; });
+    var hits = 0;
+    A.forEach(function (g) {
+      if (counts[g] > 0) { hits++; counts[g]--; }
+    });
+    return hits / A.length;
+  }
+  function fuzzySearchFaq(query) {
+    var q = query.trim().toLowerCase();
+    if (!q) return [];
+    var scored = FAQ.map(function (f) {
+      var hay = (f.q + " " + f.keywords).toLowerCase();
+      return { f: f, score: bigramSimilarity(q, hay) };
+    }).filter(function (x) { return x.score >= 0.3; });
+    scored.sort(function (a, b) { return b.score - a.score; });
+    return scored.slice(0, 4).map(function (x) { return x.f; });
+  }
+
   // "OK 마스터 트렌드 분석해줘"처럼 특정 샘플의 분석을 직접 요청하는 문장이면,
   // FAQ를 찾아 주는 대신 그 샘플의 실제 데이터로 §4-5의 추이 탐지를 그 자리에서
   // 돌려서 진짜 결과를 보여준다. "무엇이든 답하는 AI"는 아니지만, 미리 만든
@@ -2587,11 +2649,23 @@
     var live = matchLiveAnalysis(query || "");
     var liveHtml = live ? renderLiveAnalysis(live) : "";
     var results = searchFaq(query || "");
+    var isFuzzy = false;
+
+    // 정확히 일치하는 게 없으면(빈 검색어 제외) 유사 질문을 대신 찾아 준다 —
+    // 완전히 막다른 화면 대신 "혹시 이런 게 궁금하신가요?"로 이어 준다.
+    if (!live && !results.length && query && query.trim()) {
+      results = fuzzySearchFaq(query);
+      isFuzzy = results.length > 0;
+    }
 
     if (!live && !results.length) {
       list.innerHTML = '<div class="help-empty">일치하는 답을 못 찾았습니다.<br>문의는 후공정 생산기술팀으로 부탁드립니다.</div>';
       return;
     }
+
+    var fuzzyNoteHtml = isFuzzy
+      ? '<div class="help-fuzzy-note">정확히 일치하는 답은 못 찾았지만, 혹시 이런 게 궁금하신가요?</div>'
+      : "";
 
     var itemsHtml = results.map(function (f, i) {
       return '<div class="help-item">' +
@@ -2606,7 +2680,7 @@
         "</div>" +
         "</div>";
     }).join("");
-    list.innerHTML = liveHtml + itemsHtml;
+    list.innerHTML = liveHtml + fuzzyNoteHtml + itemsHtml;
 
     results.forEach(function (f, i) {
       var btn = list.querySelector('.help-q[data-i="' + i + '"]');
@@ -2683,6 +2757,24 @@
 
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape" && !$("helpPanel").hidden) closeHelp();
+    });
+  }
+
+  // 맨 위로 이동 버튼 — 화면을 어느 정도 내려야만 보이게 하고(항상 떠 있으면
+  // ①시업 전 점검 입력 같은 첫 화면에서 불필요하게 자리를 차지한다), 누르면
+  // 맨 위로 스크롤한다. 위치는 챗봇 버튼 바로 위(§CSS #toTopBtn)라 서로 겹치지 않는다.
+  function initToTop() {
+    var btn = $("toTopBtn");
+    var SHOW_AT = 400;
+    function toggle() {
+      btn.classList.toggle("show", window.scrollY > SHOW_AT);
+    }
+    window.addEventListener("scroll", toggle, { passive: true });
+    toggle();
+    btn.addEventListener("click", function () {
+      var reduceMotion = false;
+      try { reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
+      window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
     });
   }
 
@@ -2776,6 +2868,7 @@
     $("calibUnlockPw").addEventListener("keydown", function (e) { if (e.key === "Enter") tryCalibReveal(); });
 
     initHelp();
+    initToTop();
 
     renderAll();
     syncNow("auto");
