@@ -78,7 +78,13 @@
     "#dnk-gate{position:fixed;inset:0;background:#1b4a49;display:flex;align-items:center;justify-content:center;overflow:hidden;z-index:99999;font-family:-apple-system,BlinkMacSystemFont,'Malgun Gothic','Apple SD Gothic Neo',sans-serif;visibility:visible;}" +
     "#dnk-gate .bg-grid{position:absolute;inset:0;background-image:linear-gradient(#2c5f5d 1px,transparent 1px),linear-gradient(90deg,#2c5f5d 1px,transparent 1px);background-size:28px 28px;opacity:0;animation:dnkGridIn .6s ease .1s forwards;}" +
     "#dnk-gate .bg-scan{position:absolute;left:0;right:0;top:-18%;height:30%;background:linear-gradient(180deg,rgba(159,196,192,0),rgba(159,196,192,.28),rgba(159,196,192,0));animation:dnkScan 1.3s cubic-bezier(.4,0,.2,1) .3s forwards;}" +
-    "#dnk-gate .bg-line{position:absolute;left:8%;right:8%;top:38%;height:24%;}" +
+    // 꺾은선은 카드 글자 뒤(화면 한가운데)를 가로지르지 않도록 아래쪽에 둔다.
+    // 예전에는 top:38%/height:24% 라 글자와 정확히 겹쳐 읽기 힘들었다.
+    "#dnk-gate .bg-line{position:absolute;left:8%;right:8%;top:68%;height:18%;opacity:.55;}" +
+    // 카드 글자 뒤에 배경색 음영을 깔아, 격자·스캔선 위에서도 항상 또렷하게 읽히게 한다.
+    "#dnk-gate .bg-scrim{position:absolute;inset:0;z-index:1;pointer-events:none;" +
+      "background:radial-gradient(ellipse 72% 34% at 50% 47%,rgba(27,74,73,.94) 0%,rgba(27,74,73,.82) 55%,rgba(27,74,73,0) 100%);" +
+      "opacity:0;animation:dnkGridIn .5s ease .25s forwards;}" +
     ".dnk-gate-card{position:relative;z-index:2;width:100%;max-width:300px;padding:0 24px;text-align:center;opacity:0;transform:translateY(8px);animation:dnkCardIn .7s ease 1.1s forwards;}" +
     ".dnk-gate-brand{color:#9fc4c0;font-size:11px;letter-spacing:.06em;margin-bottom:10px;}" +
     ".dnk-gate-title{color:#fff;font-size:17px;font-weight:800;margin-bottom:6px;}" +
@@ -94,7 +100,12 @@
     "@keyframes dnkCardIn{to{opacity:1;transform:none;}}" +
     "@keyframes dnkLineDraw{to{stroke-dashoffset:0;}}" +
     "@keyframes dnkGateOut{to{opacity:0;}}" +
-    "@media (prefers-reduced-motion:reduce){#dnk-gate .bg-grid,#dnk-gate .bg-scan,#dnk-gate .bg-line path,.dnk-gate-card{animation:none!important;opacity:1!important;transform:none!important;}}";
+    // 동작 줄이기: 애니메이션만 끄고, 각 요소는 "다 끝난 상태"로 고정한다.
+    // (음영도 함께 켜 줘야 한다 — 기본값이 opacity:0이라 빼먹으면 글자 배경이 사라진다)
+    "@media (prefers-reduced-motion:reduce){" +
+      "#dnk-gate .bg-grid,#dnk-gate .bg-scan,#dnk-gate .bg-line path,#dnk-gate .bg-scrim,.dnk-gate-card{" +
+        "animation:none!important;transform:none!important;}" +
+      "#dnk-gate .bg-grid,#dnk-gate .bg-scan,#dnk-gate .bg-scrim,.dnk-gate-card{opacity:1!important;}}";
   document.documentElement.appendChild(style);
 
   var wrap = document.createElement("div");
@@ -112,6 +123,7 @@
         'stroke-linecap="round" stroke-linejoin="round" pathLength="1" ' +
         'style="stroke-dasharray:1;stroke-dashoffset:1;animation:dnkLineDraw 1s ease .5s forwards;"/>' +
     '</svg>' +
+    '<div class="bg-scrim"></div>' +
     (already
       ? '<div class="dnk-gate-card">' +
         '<div class="dnk-gate-brand">DnK MOBILITY · 후공정 생산기술팀</div>' +

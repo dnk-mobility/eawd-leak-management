@@ -26,6 +26,9 @@
   .eq-tab.on{background:var(--navy);border-color:var(--navy);color:#fff;}
   .eq-tab:active{opacity:.85;}
 
+  .period-bar{max-width:640px;margin:10px auto 0;padding:0 14px;}
+  .period-bar .seg{max-width:220px;}
+
   .month-bar{
     max-width:640px;margin:10px auto 0;padding:0 14px;
     display:flex;align-items:center;gap:8px;
@@ -305,13 +308,20 @@
 
 <div class="eq-tabs" id="eqTabs"></div>
 
+<div class="period-bar">
+  <div class="seg" id="periodSeg">
+    <button type="button" data-period="week">주간</button>
+    <button type="button" data-period="month" class="on">월간</button>
+  </div>
+</div>
+
 <div class="month-bar">
-  <button class="navbtn" id="prevM" type="button" aria-label="이전 달">‹</button>
+  <button class="navbtn" id="prevM" type="button" aria-label="이전">‹</button>
   <div class="mv">
     <span class="label" id="mLabel">—</span>
     <span class="meta" id="mMeta">—</span>
   </div>
-  <button class="navbtn" id="nextM" type="button" aria-label="다음 달">›</button>
+  <button class="navbtn" id="nextM" type="button" aria-label="다음">›</button>
 </div>
 
 <div class="sync-bar" id="syncBar">
@@ -367,7 +377,7 @@
   </details>
 
   <details class="section" id="secList">
-    <summary><span class="num">③</span>월별 기록<span class="chev">▾</span></summary>
+    <summary><span class="num">③</span><span id="listTitle">월별 기록</span><span class="chev">▾</span></summary>
     <div class="body" id="listBody"></div>
   </details>
 
@@ -384,9 +394,10 @@
     <summary><span class="num">⑤</span><span id="calibTitle">디텍터 보정 이력</span><span class="chev">▾</span></summary>
     <div class="body">
       <div id="calibHiddenView" hidden>
-        <p class="hint" style="margin:0 0 12px;">이 항목은 잠겨 있습니다. 내용을 보려면 <b>접속 암호</b>를 입력하세요.</p>
-        <div class="fld"><label>접속 암호</label>
+        <p class="hint" style="margin:0 0 12px;">이 항목은 잠겨 있습니다. 내용을 보려면 암호를 입력하세요.</p>
+        <div class="fld"><label>잠금 해제 암호</label>
           <input type="password" id="calibUnlockPw" placeholder="암호 입력" autocomplete="off">
+          <p class="hint" style="margin-top:4px;">QR을 찍고 이 사이트에 들어올 때 쓰는 <b>접속 암호와 같은 암호</b>입니다.</p>
         </div>
         <button class="btn sub" id="calibUnlockBtn" type="button">잠금 해제</button>
         <p class="hint" id="calibUnlockErr" style="color:var(--warn-text);"></p>
@@ -398,6 +409,7 @@
         <div id="calibEditGate" style="margin-top:14px;">
           <div class="fld"><label>관리자 암호 (입력·삭제용)</label>
             <input type="password" id="calibPw" placeholder="암호 입력" autocomplete="off">
+            <p class="hint" style="margin-top:4px;">사이트 <b>접속 암호와는 다른 암호</b>입니다. 모르시면 후공정 생산기술팀에 문의하세요.</p>
           </div>
           <button class="btn sub" id="calibGateBtn" type="button">관리자 모드로 전환</button>
           <p class="hint" id="calibGateErr" style="color:var(--warn-text);"></p>
@@ -518,7 +530,9 @@
 
   /* ===== 상태 ===== */
   var eqId = "120";
-  var ym = "";        // "2026-09"
+  var ym = "";          // "2026-09" — 월간 모드의 기준, 주간 모드에서도 동기화 대상 힌트로 씀
+  var period = "month"; // "month" | "week"
+  var weekStart = "";   // "2026-09-07" (월요일) — 주간 모드일 때만 사용
   var shift = "주간";
   var db = null;      // { v:1, eq:{ "120": { samples:[], recs:[] } } }
 
@@ -583,6 +597,32 @@
     return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
   }
 
+  // 주간 보기용 — 월요일 시작 기준(공장 교대 근무 표기 관행에 맞춤)
+  function dateFromStr(s) { return new Date(s + "T00:00:00"); }
+  function strFromDate(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
+  function addDays(s, n) { var d = dateFromStr(s); d.setDate(d.getDate() + n); return strFromDate(d); }
+  function mondayOf(s) {
+    var d = dateFromStr(s);
+    var day = d.getDay();                       // 0=일 ~ 6=토
+    var diff = day === 0 ? -6 : 1 - day;
+    d.setDate(d.getDate() + diff);
+    return strFromDate(d);
+  }
+  function weekEndOf(s) { return addDays(s, 6); }
+  function fmtMD(s) { return parseInt(s.slice(5, 7), 10) + "/" + parseInt(s.slice(8, 10), 10); }
+
+  // 빈 상태 문구용 짧은 라벨 ("9월" / "9/7~9/13")과, 그래프 제목용 긴 라벨
+  // ("2026년 9월" / "2026년 9/7~9/13") — 월간·주간 공통으로 쓴다.
+  function periodLabel() {
+    return period === "week" ? fmtMD(weekStart) + "~" + fmtMD(weekEndOf(weekStart))
+      : parseInt(ym.slice(5, 7), 10) + "월";
+  }
+  function periodTitle() {
+    return period === "week"
+      ? parseInt(weekStart.slice(0, 4), 10) + "년 " + fmtMD(weekStart) + "~" + fmtMD(weekEndOf(weekStart))
+      : parseInt(ym.slice(0, 4), 10) + "년 " + parseInt(ym.slice(5, 7), 10) + "월";
+  }
+
   function num(v) {
     if (v === null || v === undefined || v === "") return null;
     var n = parseFloat(v);
@@ -640,10 +680,23 @@
     return (a.shift === "주간" ? 0 : 1) - (b.shift === "주간" ? 0 : 1);
   }
 
-  function monthRecs() {
+  // 현재 보기 단위(월간/주간)에 맞는 기록만, 일자·교대 순으로 정렬해 반환
+  function periodRecs() {
+    if (period === "week") {
+      var s = weekStart, e = weekEndOf(weekStart);
+      return cur().recs.filter(function (r) { return r.date >= s && r.date <= e; }).sort(byDateShift);
+    }
     return cur().recs
       .filter(function (r) { return r.date.slice(0, 7) === ym; })
       .sort(byDateShift);
+  }
+
+  // 지금 화면에 필요한 "YYYY-MM" 목록 — 월간이면 1개, 주간이면 주가 걸친 달 수만큼
+  // (예: 9/28~10/4 주는 9월·10월 두 달) 동기화 범위를 정할 때 쓴다.
+  function periodMonths() {
+    if (period !== "week") return [ym];
+    var a = weekStart.slice(0, 7), b = weekEndOf(weekStart).slice(0, 7);
+    return a === b ? [a] : [a, b];
   }
 
   // ④ "전체 이력 보기" — 달 구분 없이 그 샘플로 기록된 값을 전부 시간순으로 모은다
@@ -703,19 +756,43 @@
     });
   }
 
-  function shiftMonth(delta) {
-    var y = parseInt(ym.slice(0, 4), 10);
-    var m = parseInt(ym.slice(5, 7), 10) + delta;
-    while (m < 1) { m += 12; y -= 1; }
-    while (m > 12) { m -= 12; y += 1; }
-    ym = y + "-" + pad2(m);
+  function shiftPeriod(delta) {
+    if (period === "week") {
+      weekStart = addDays(weekStart, delta * 7);
+      ym = weekStart.slice(0, 7);          // 동기화 힌트용으로 같이 맞춰 둔다
+    } else {
+      var y = parseInt(ym.slice(0, 4), 10);
+      var m = parseInt(ym.slice(5, 7), 10) + delta;
+      while (m < 1) { m += 12; y -= 1; }
+      while (m > 12) { m -= 12; y += 1; }
+      ym = y + "-" + pad2(m);
+    }
+    renderAll();
+    syncNow("auto");
+  }
+
+  function setPeriod(p) {
+    if (p === period) return;
+    period = p;
+    if (period === "week") weekStart = mondayOf($("inDate").value || todayStr());
+    $("periodSeg").querySelectorAll("button").forEach(function (b) {
+      b.classList.toggle("on", b.getAttribute("data-period") === period);
+    });
     renderAll();
     syncNow("auto");
   }
 
   function renderMonth() {
-    $("mLabel").textContent = parseInt(ym.slice(0, 4), 10) + "년 " + parseInt(ym.slice(5, 7), 10) + "월";
-    var recs = monthRecs();
+    var recs = periodRecs();
+
+    if (period === "week") {
+      $("mLabel").textContent = fmtMD(weekStart) + " ~ " + fmtMD(weekEndOf(weekStart));
+      $("nextM").disabled = weekStart >= mondayOf(todayStr());
+    } else {
+      $("mLabel").textContent = parseInt(ym.slice(0, 4), 10) + "년 " + parseInt(ym.slice(5, 7), 10) + "월";
+      $("nextM").disabled = ym >= todayStr().slice(0, 7);
+    }
+
     var days = {};
     var ng = 0;
     recs.forEach(function (r) {
@@ -726,7 +803,8 @@
     $("mMeta").textContent = dayCount === 0
       ? "기록 없음"
       : "점검 " + dayCount + "일 · " + recs.length + "회" + (ng ? " · NG " + ng + "건" : " · 전건 OK");
-    $("nextM").disabled = ym >= todayStr().slice(0, 7);
+
+    $("listTitle").textContent = period === "week" ? "주별 기록" : "월별 기록";
   }
 
   /* =========================================================================
@@ -1011,7 +1089,7 @@
         '" fill="' + (isNg ? "#b8453a" : "#2f6e6c") + '" stroke="#fff" stroke-width="1.2"/>');
     });
 
-    var xCaption = opts.xCaption || ("일자 (" + parseInt(ym.slice(5, 7), 10) + "월)");
+    var xCaption = opts.xCaption || ("일자 (" + periodLabel() + ")");
     svg.push('<text x="' + PL + '" y="' + (H - 4) + '" font-size="7.5" fill="#b3a896">' + esc(xCaption) + '</text>');
     svg.push('<text x="' + (PL - 5) + '" y="' + (PT - 5) + '" font-size="7.5" fill="#b3a896" text-anchor="end">' + UNIT + '</text>');
     svg.push("</svg>");
@@ -1294,7 +1372,7 @@
   function renderChart() {
     var body = $("chartBody");
     var samples = cur().samples;
-    var recs = monthRecs();
+    var recs = periodRecs();
     body.innerHTML = "";
 
     if (!samples.length) {
@@ -1302,7 +1380,7 @@
       return;
     }
     if (!recs.length) {
-      body.innerHTML = '<div class="empty">' + parseInt(ym.slice(5, 7), 10) + '월 기록이 없습니다.<br>' +
+      body.innerHTML = '<div class="empty">' + esc(periodLabel()) + ' 기록이 없습니다.<br>' +
         '① 시업 전 점검 입력에서 누설값을 저장하면 그래프가 그려집니다.</div>';
       return;
     }
@@ -1323,8 +1401,7 @@
       drawn++;
 
       var ngN = points.filter(function (p) { return p.judge === "NG"; }).length;
-      var yearNum = parseInt(ym.slice(0, 4), 10), monthNum = parseInt(ym.slice(5, 7), 10);
-      var chartTitle1 = EQ[eqId].title + " · " + yearNum + "년 " + monthNum + "월";
+      var chartTitle1 = EQ[eqId].title + " · " + periodTitle();
       var chartTitle2 = s.name + "(" + s.type + ")" + (s.retired ? " · 폐기됨(" + s.retiredAt + ")" : "") +
         " · " + specText(s) + " · " + (ngN ? "NG " + ngN + "건" : "전건 OK");
       var chart = buildChart(s, points, chartTitle1, chartTitle2);
@@ -1354,7 +1431,7 @@
     });
 
     if (!drawn) {
-      body.innerHTML = '<div class="empty">' + parseInt(ym.slice(5, 7), 10) + '월에 입력된 누설값이 없습니다.</div>';
+      body.innerHTML = '<div class="empty">' + esc(periodLabel()) + '에 입력된 누설값이 없습니다.</div>';
     }
   }
 
@@ -1363,12 +1440,12 @@
      ========================================================================= */
   function renderList() {
     var body = $("listBody");
-    var recs = monthRecs();
+    var recs = periodRecs();
     var samples = cur().samples;
     body.innerHTML = "";
 
     if (!recs.length) {
-      body.innerHTML = '<div class="empty">' + parseInt(ym.slice(5, 7), 10) + '월 기록이 없습니다.</div>';
+      body.innerHTML = '<div class="empty">' + esc(periodLabel()) + ' 기록이 없습니다.</div>';
       return;
     }
 
@@ -2108,8 +2185,9 @@
       // 방금 점을 터치해 둔 상태라면 강조 링이 이미지에 같이 찍히므로 지운다
       var hl = svg.querySelector(".pt-hl");
       if (hl) hl.setAttribute("opacity", "0");
+      var fileSuffix = period === "week" ? weekStart + "~" + weekEndOf(weekStart) : ym;
       svgToPngBlob(svg).then(function (blob) {
-        downloadBlob("누설값그래프_공정No" + eqId + "_" + name.replace(/[\\/:*?"<>|\s]/g, "") + "_" + ym + ".png", blob);
+        downloadBlob("누설값그래프_공정No" + eqId + "_" + name.replace(/[\\/:*?"<>|\s]/g, "") + "_" + fileSuffix + ".png", blob);
         ok++;
         // 브라우저가 다운로드를 한꺼번에 여러 개 막는 경우가 있어 사이에 텀을 둔다
         setTimeout(next, 400);
@@ -2198,7 +2276,9 @@
   // 해당 설비·해당 달의 기록은 서버 것을 정답으로 보고 통째로 교체한다
   // (미전송 건이 남아 있으면 이 함수까지 오지 않는다 — syncNow 참고).
   function applyPulled(data, eqAt, ymAt) {
-    if (eqAt !== eqId || ymAt !== ym) return false;   // 그 사이 사용자가 화면을 바꿨으면 버림
+    // 주간 모드에서는 화면 하나가 최대 두 달(periodMonths())에 걸칠 수 있어,
+    // "지금 ym과 정확히 같은가"가 아니라 "지금 화면에 필요한 달들 중 하나인가"로 본다.
+    if (eqAt !== eqId || periodMonths().indexOf(ymAt) < 0) return false;   // 그 사이 화면이 바뀌었으면 버림
     var e = db.eq[eqAt];
 
     if (data.samples && data.samples.length) {
@@ -2222,10 +2302,12 @@
   }
 
   // reason: "auto"(화면 전환) | "manual"(새로고침 버튼)
+  // 주간 모드에서 한 주가 두 달에 걸치면(예: 9/28~10/4) periodMonths()가 그 두 달을
+  // 모두 돌려주므로, 그 달들을 전부 받아온다.
   function syncNow(reason) {
     if (!syncOn()) { refreshSyncBar(); return Promise.resolve(); }
 
-    var eqAt = eqId, ymAt = ym;
+    var eqAt = eqId, months = periodMonths();
     setSync("busy", reason === "manual" ? "동기화 중…" : "불러오는 중…");
 
     return sync.flush().then(function (res) {
@@ -2233,10 +2315,16 @@
         setSync("warn", "미전송 " + res.left + "건 — 통신이 되면 자동으로 다시 보냅니다");
         return null;                                   // 미전송이 남으면 내려받지 않는다
       }
-      return sync.pull(eqAt, ymAt);
-    }).then(function (data) {
-      if (!data) return;
-      if (applyPulled(data, eqAt, ymAt)) {
+      return Promise.all(months.map(function (m) {
+        return sync.pull(eqAt, m).then(function (data) { return { m: m, data: data }; });
+      }));
+    }).then(function (results) {
+      if (!results) return;
+      var any = false;
+      results.forEach(function (r) {
+        if (r.data && applyPulled(r.data, eqAt, r.m)) any = true;
+      });
+      if (any) {
         lastSyncAt = new Date().toTimeString().slice(0, 5);
         renderAll();
         if (reason === "manual") toast("구글시트에서 불러왔습니다");
@@ -2570,13 +2658,24 @@
     if (q && EQ[q]) eqId = q;
 
     ym = todayStr().slice(0, 7);
+    weekStart = mondayOf(todayStr());
     $("inDate").value = todayStr();
 
-    $("prevM").addEventListener("click", function () { shiftMonth(-1); });
-    $("nextM").addEventListener("click", function () { shiftMonth(1); });
+    $("prevM").addEventListener("click", function () { shiftPeriod(-1); });
+    $("nextM").addEventListener("click", function () { shiftPeriod(1); });
+
+    $("periodSeg").addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-period]");
+      if (!b) return;
+      setPeriod(b.getAttribute("data-period"));
+    });
 
     $("inDate").addEventListener("change", function () {
-      if ($("inDate").value) { ym = $("inDate").value.slice(0, 7); renderMonth(); renderChart(); renderList(); }
+      if ($("inDate").value) {
+        if (period === "week") weekStart = mondayOf($("inDate").value);
+        else ym = $("inDate").value.slice(0, 7);
+        renderMonth(); renderChart(); renderList();
+      }
       fillFormFromRecord();
     });
 
