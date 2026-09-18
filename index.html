@@ -205,6 +205,10 @@
     border:1px dashed var(--gray-300);
   }
   .hint{font-size:11.5px;color:var(--gray-500);line-height:1.5;margin:6px 0 0;}
+  .hint-warn{
+    color:#b8453a;font-weight:800;font-size:12.5px;
+    background:#f5e3df;border:1px solid #dcbcb5;border-radius:6px;padding:7px 9px;
+  }
 
   table.hist td.act{min-width:52px;}
   table.hist button.mini{
@@ -238,6 +242,14 @@
     display:flex;flex-direction:column;overflow:hidden;
   }
   #helpPanel[hidden]{display:none;}
+  /* 검색칸에 포커스하면(=폰이라면 키보드가 뜸) 패널을 화면 위쪽으로 옮긴다.
+     기본값(하단 고정)인 채로 두면 키보드가 화면 아래를 가릴 때 패널까지 같이
+     가려진다 — position:fixed/absolute 는 키보드가 줄여 놓은 "보이는 영역"이
+     아니라 원래 레이아웃 뷰포트 기준으로 위치가 잡히는 기기가 많기 때문. */
+  #helpPanel.kb-avoid{
+    position:fixed;top:calc(12px + env(safe-area-inset-top,0px));right:16px;bottom:auto;
+    width:min(340px,calc(100vw - 32px));
+  }
   .help-head{
     display:flex;align-items:center;gap:8px;padding:12px 14px;background:var(--navy);color:#fff;
     font-size:13px;font-weight:800;
@@ -275,7 +287,21 @@
   .help-live-head{font-size:12.5px;font-weight:800;color:var(--navy);margin-bottom:6px;}
   .help-live-body{font-size:12px;color:var(--gray-700);line-height:1.55;}
   .help-live-finding + .help-live-finding{margin-top:8px;padding-top:8px;border-top:1px dashed var(--gray-300);}
-  @media (prefers-reduced-motion:reduce){ .toast,.ch-tip{transition:none;} }
+  /* NG 점(빨간 점) 호버 효과 — 마우스가 있는 환경(PC)에서만 건다.
+     터치 기기는 :hover가 "탭한 뒤에도 계속 남는" 경우가 있어(sticky hover),
+     pointer:fine 없이 걸면 폰에서 점을 한 번 탭한 뒤 계속 빨갛게 깜빡이는 것처럼
+     보일 수 있다 — 이 프로젝트가 참고한 QR 정보관리 시스템도 같은 이유로
+     hover 규칙을 이 미디어쿼리 안에만 둔다. 폰에서는 대신 점을 탭하면 값이
+     뜨는 기능(attachChartTouch)이 이미 있어, 그게 사실상 같은 역할을 한다. */
+  @media (hover:hover) and (pointer:fine){
+    .chart-card svg .pt-ng{cursor:pointer;}
+    .chart-card svg .pt-ng:hover{animation:ngPulse .9s ease-in-out infinite;}
+  }
+  @keyframes ngPulse{
+    0%,100%{opacity:1;filter:drop-shadow(0 0 0 rgba(184,69,58,0));}
+    50%{opacity:.5;filter:drop-shadow(0 0 5px rgba(184,69,58,.95));}
+  }
+  @media (prefers-reduced-motion:reduce){ .toast,.ch-tip{transition:none;} .chart-card svg .pt-ng:hover{animation:none;} }
 </style>
 </head>
 <body>
@@ -875,11 +901,13 @@
       $("inUser").value = rec.by || "";
       $("inNote").value = rec.note || "";
       $("saveBtn").textContent = "수정 저장";
-      $("saveHint").textContent = "이 일자·교대에 이미 기록이 있습니다. 저장하면 덮어씁니다.";
+      $("saveHint").textContent = "⚠ 이 일자·교대에 이미 기록이 있습니다. 저장하면 덮어씁니다.";
+      $("saveHint").classList.add("hint-warn");
     } else {
       $("inNote").value = "";
       $("saveBtn").textContent = "저장";
       $("saveHint").textContent = "같은 일자·교대로 다시 저장하면 기존 기록을 덮어씁니다.";
+      $("saveHint").classList.remove("hint-warn");
       try {
         if (!$("inUser").value) $("inUser").value = localStorage.getItem(USER_KEY) || "";
       } catch (e) {}
@@ -1086,7 +1114,8 @@
     points.forEach(function (p, i) {
       var isNg = p.judge === "NG";
       svg.push('<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(p.v).toFixed(1) + '" r="' + (isNg ? r0 + 1 : r0) +
-        '" fill="' + (isNg ? "#b8453a" : "#2f6e6c") + '" stroke="#fff" stroke-width="1.2"/>');
+        '" fill="' + (isNg ? "#b8453a" : "#2f6e6c") + '" stroke="#fff" stroke-width="1.2"' +
+        (isNg ? ' class="pt-ng"' : '') + '/>');
     });
 
     var xCaption = opts.xCaption || ("일자 (" + periodLabel() + ")");
@@ -1813,8 +1842,10 @@
        읽기/쓰기를 분리했다. 이력 표는 잠금과 무관하게 항상 보이고, 입력 폼과
        삭제 버튼만 2차 암호(관리자 전용)로 잠근다. 계정 체계가 없는 구조라
        "특정 한 사람만 수정"은 그 사람만 아는 암호로 구현할 수밖에 없다.
-       sessionStorage를 쓴다 — 1차 암호(이 폰에서 평생 1회)보다 더 자주
-       재확인되어야 하는 권한이라고 판단해서다(탭을 닫으면 다시 물어봄).
+       sessionStorage를 쓴다(탭을 닫으면 다시 물어봄) — 1차 암호도 이후
+       sessionStorage로 바뀌어(2026-09-19 5차, gate.js 참고) 지금은 재확인
+       주기가 같지만, 수정 권한이라는 성격상 세션 단위 재확인이 맞다고 보고
+       그대로 둔다.
      - "수정(덮어쓰기)"은 지원하지 않는다 — 원본 설계가 "새 이력은 맨 아래에
        계속 추가"였고, 같은 날 같은 샘플을 두 번 보정하는 일도 있어 자연키로
        묶을 수 없다. 잘못 입력했으면 삭제 후 다시 추가한다.
@@ -2495,14 +2526,20 @@
   // 재사용하는 것뿐이라 비용이 들지 않는다.
   var HELP_ANALYSIS_WORDS = ["트렌드", "분석", "추이", "이상", "신호", "어때", "괜찮", "상태"];
 
+  // 띄어쓰기·대소문자 차이로 매칭이 실패하지 않도록 정규화한다.
+  // "OK마스터샘플 트렌드 분석해줘"(붙여씀) 같은 실제 입력이 "OK 마스터"(띄어씀)
+  // 샘플명과 안 맞아 매칭에 실패하던 문제를 겪은 뒤 추가함(개선이력.md 참고).
+  function normForMatch(s) { return String(s || "").replace(/\s+/g, "").toLowerCase(); }
+
   function matchLiveAnalysis(query) {
     var q = query.trim();
     if (!q) return null;
     var hasIntent = HELP_ANALYSIS_WORDS.some(function (w) { return q.indexOf(w) >= 0; });
     if (!hasIntent) return null;
+    var nq = normForMatch(q);
     var samples = cur().samples;
     for (var i = 0; i < samples.length; i++) {
-      if (samples[i].name && q.indexOf(samples[i].name) >= 0) return samples[i];
+      if (samples[i].name && nq.indexOf(normForMatch(samples[i].name)) >= 0) return samples[i];
     }
     return null;
   }
@@ -2618,6 +2655,21 @@
     $("helpSearch").addEventListener("input", function () {
       renderHelpList($("helpSearch").value);
     });
+
+    // 터치 기기(손가락 위주 포인터)에서만 — 검색칸에 포커스하면(키보드가 뜨면)
+    // 패널을 화면 위쪽으로 옮겨 키보드에 가려지지 않게 한다. PC는 키보드가
+    // 화면을 덮지 않으므로 그대로 둔다.
+    var isTouch = false;
+    try { isTouch = window.matchMedia("(pointer:coarse)").matches; } catch (e) {}
+    if (isTouch) {
+      $("helpSearch").addEventListener("focus", function () {
+        $("helpPanel").classList.add("kb-avoid");
+      });
+      $("helpSearch").addEventListener("blur", function () {
+        $("helpPanel").classList.remove("kb-avoid");
+      });
+    }
+
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape" && !$("helpPanel").hidden) closeHelp();
     });

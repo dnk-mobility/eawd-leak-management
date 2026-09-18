@@ -1,16 +1,20 @@
 /*
-  접속 암호 게이트 — 기기 기억 방식 (마스터 샘플 트렌드 전용, QR 정보관리 시스템의 gate.js와 별개)
+  접속 암호 게이트 (마스터 샘플 트렌드 전용, QR 정보관리 시스템의 gate.js와 별개)
 
-  - QR 코드 목적 자체가 "찍을 때마다 즉시 입력 화면"이므로, 예전 시스템처럼 매번(같은 탭이 아니면)
-    다시 묻는 방식(sessionStorage)은 이 프로젝트에는 맞지 않는다. 그래서 localStorage로 "이 폰"
-    단위로 한 번만 확인하고, 이후로는 화면이 즉시 뜬다.
   - 이 프로젝트는 기술문서·PDF 뷰어가 없어 2차 암호 단계도 없다. 암호는 1개뿐.
-  - 설비별 전용 폰/태블릿 1대를 쓰는 운영 방식(개선이력 참고)과 맞는 선택 — 그 폰에서 최초 1회만
-    맞히면, 이후 교대 작업자가 계속 써도 다시 묻지 않는다.
   - 브라우저 데이터를 지우거나 다른 기기로 바꾸면 다시 물어본다.
   - 암호를 바꾸려면 새 암호의 SHA-256 해시로 아래 PASS_HASH를 교체:
     node -e "console.log(require('crypto').createHash('sha256').update('새암호','utf8').digest('hex'))"
   - index.html은 QR 정보관리 시스템과 동일하게 window.dnkGate.ready 를 기다렸다가 화면을 그린다.
+
+  2026-09-19 (5차): sessionStorage로 전환 — QR 정보관리 시스템과 동일하게 맞춰 달라는 요청.
+  원래는 "QR 코드 목적 자체가 찍을 때마다 즉시 입력 화면이므로, 매번(새 탭마다) 다시 묻는
+  QR 시스템 방식은 이 프로젝트에 안 맞는다"는 판단으로 localStorage(기기당 평생 1회)를 썼는데,
+  그 판단을 뒤집는 명시적 요청을 받아 QR 시스템과 같은 sessionStorage(탭 닫으면 다시 물어봄)로
+  바꿨다. **트레이드오프를 기록해 둔다:** 같은 탭 안에서 새로고침하는 정도는 다시 안 물어보지만,
+  QR을 다시 찍어 새 탭이 열리거나 앱을 완전히 종료했다 재실행하면 매번 다시 암호를 입력해야
+  한다 — 하루에 QR을 여러 번 찍는 운영이라면 이전보다 손이 더 간다. 이후 다시 "한 번만 물어보게"
+  요청이 오면 localStorage로 되돌리면 된다(이 파일의 git 이력 참고).
 
   2026-09-18: 배경 연출 추가 (계측 그리드 스캔 + 꺾은선 그리기 결합). 이 앱이 "누설값 트렌드"
   앱이라는 정체성을 게이트 화면에서부터 보여주려고 넣었다 — 격자가 옅게 깔리고, 스캔 라인이
@@ -46,7 +50,7 @@
 
   function isUnlocked() {
     try {
-      return localStorage.getItem(KEY) === "1";
+      return sessionStorage.getItem(KEY) === "1";
     } catch (e) {
       return false;
     }
@@ -54,7 +58,7 @@
 
   function markUnlocked() {
     try {
-      localStorage.setItem(KEY, "1");
+      sessionStorage.setItem(KEY, "1");
     } catch (e) {}
   }
 
@@ -80,7 +84,10 @@
     "#dnk-gate .bg-scan{position:absolute;left:0;right:0;top:-18%;height:30%;background:linear-gradient(180deg,rgba(159,196,192,0),rgba(159,196,192,.28),rgba(159,196,192,0));animation:dnkScan 1.3s cubic-bezier(.4,0,.2,1) .3s forwards;}" +
     // 꺾은선은 카드 글자 뒤(화면 한가운데)를 가로지르지 않도록 아래쪽에 둔다.
     // 예전에는 top:38%/height:24% 라 글자와 정확히 겹쳐 읽기 힘들었다.
-    "#dnk-gate .bg-line{position:absolute;left:8%;right:8%;top:68%;height:18%;opacity:.55;}" +
+    // width:100%가 없으면 SVG(교체 요소)가 viewBox 비율(200:60)과 height만으로
+    // 폭을 역산해 버려, left/right로 정한 폭을 무시하고 왼쪽에 쏠려 그려진다
+    // (PC처럼 넓은 화면일수록 차이가 커짐 — 실제로 겪은 문제, 개선이력.md 참고).
+    "#dnk-gate .bg-line{position:absolute;left:8%;right:8%;top:68%;width:84%;height:18%;opacity:.55;}" +
     // 카드 글자 뒤에 배경색 음영을 깔아, 격자·스캔선 위에서도 항상 또렷하게 읽히게 한다.
     "#dnk-gate .bg-scrim{position:absolute;inset:0;z-index:1;pointer-events:none;" +
       "background:radial-gradient(ellipse 72% 34% at 50% 47%,rgba(27,74,73,.94) 0%,rgba(27,74,73,.82) 55%,rgba(27,74,73,0) 100%);" +
@@ -132,7 +139,7 @@
       : '<div class="dnk-gate-card">' +
         '<div class="dnk-gate-brand">DnK MOBILITY · 후공정 생산기술팀</div>' +
         '<div class="dnk-gate-title" id="dnk-gate-title">사내 전용 페이지입니다</div>' +
-        '<div class="dnk-gate-sub">이 기기에서 처음 한 번만 확인합니다.<br>다음부터는 QR을 찍으면 바로 입력 화면이 뜹니다.</div>' +
+        '<div class="dnk-gate-sub">이 화면을 닫지 않는 동안에는 다시 묻지 않습니다.<br>QR을 다시 찍거나 새로 열면 한 번 더 확인합니다.</div>' +
         '<input id="dnk-gate-pw" class="dnk-gate-input" type="password" placeholder="접속 암호" aria-label="접속 암호" autocomplete="off" />' +
         '<div id="dnk-gate-err" class="dnk-gate-err" role="alert"></div>' +
         '<button id="dnk-gate-go" class="dnk-gate-btn" type="button">확인</button>' +
