@@ -115,16 +115,22 @@
     // 꺾은선은 카드 글자 뒤(화면 한가운데)를 가로지르지 않도록 아래쪽에 둔다.
     // width가 없으면 SVG(교체 요소)가 viewBox 비율과 height만으로 폭을 역산해 버려
     // left/right로 정한 폭을 무시하고 왼쪽에 쏠려 그려진다(개선이력.md 참고).
-    "#dnk-gate .bg-line{position:absolute;left:8%;right:8%;top:68%;width:84%;height:18%;opacity:.55;}" +
+    // 그래프 전체 밝기(opacity) — 요청에 따라 .55에서 .75로 올려 숫자·점선·실선이
+    // 더 진하게 보이도록 했다(개별 요소 opacity는 아래 SVG 마크업에서 추가로 조정).
+    "#dnk-gate .bg-line{position:absolute;left:8%;right:8%;top:68%;width:84%;height:18%;opacity:.75;}" +
     // 카드·문구 뒤에 배경색 음영을 깔아, 격자·스캔선 위에서도 항상 또렷하게 읽히게 한다.
     "#dnk-gate .bg-scrim{position:absolute;inset:0;z-index:1;pointer-events:none;" +
       "background:radial-gradient(ellipse 72% 34% at 50% 47%,rgba(27,74,73,.94) 0%,rgba(27,74,73,.82) 55%,rgba(27,74,73,0) 100%);" +
       "opacity:0;animation:dnkGridIn .5s ease .25s forwards;}" +
     // 1단계(항상 재생) — 브랜드·설비명·밑줄. 입력칸은 없다(QR 시스템 intro.js와 같은 역할).
+    // 2026-09-19(8차): 그래프가 그려지기 시작할 때(.5s) 위쪽 글자도 같이 나오도록
+    // delay를 앞당기고(전에는 그래프가 다 그려진 2s 뒤에야 글자가 시작됐다), 글자가
+    // 화면에 머무르는 느낌을 살리려 등장 시간(duration)도 함께 늘렸다(요청: "그래프
+    // 등장할 때 같이 위에 글도 나오게 하고, 그 등장 타임을 조금 더 길게").
     ".intro-text{position:relative;z-index:2;text-align:center;padding:0 24px;}" +
-    ".intro-text .brand{color:#9fc4c0;font-size:11px;letter-spacing:.06em;margin-bottom:10px;opacity:0;animation:dnkUp 1.1s ease 2s forwards;}" +
-    ".intro-text .title{color:#fff;font-size:17px;font-weight:800;opacity:0;animation:dnkUp 1.2s ease 2.15s forwards;}" +
-    ".intro-text .rule{margin:13px auto 0;width:0;height:2px;background:#9fc4c0;animation:dnkRuleDraw .7s cubic-bezier(.4,0,.2,1) 2.5s forwards;}" +
+    ".intro-text .brand{color:#9fc4c0;font-size:11px;letter-spacing:.06em;margin-bottom:10px;opacity:0;animation:dnkUp 1.6s ease .6s forwards;}" +
+    ".intro-text .title{color:#fff;font-size:17px;font-weight:800;opacity:0;animation:dnkUp 1.8s ease .75s forwards;}" +
+    ".intro-text .rule{margin:13px auto 0;width:0;height:2px;background:#9fc4c0;animation:dnkRuleDraw 1s cubic-bezier(.4,0,.2,1) 1.1s forwards;}" +
     // 1단계 전용 요소를 2단계로 넘어가며 지울 때 쓰는 빠른 페이드(JS가 클래스를 붙인다).
     ".intro-fade-out{transition:opacity " + (SCENE_FADE_MS / 1000) + "s ease;opacity:0!important;}" +
     // 2단계 — 순수 암호 카드(브랜드·제목·입력칸). 1단계가 사라진 뒤 새로 나타난다.
@@ -179,10 +185,10 @@
           '<stop offset="100%" stop-color="#9fc4c0" stop-opacity="0"/>' +
         '</linearGradient>' +
       '</defs>' +
-      '<line x1="0" y1="20" x2="200" y2="20" stroke="#9fc4c0" stroke-width="1" stroke-dasharray="3 3" opacity=".22"/>' +
+      '<line x1="0" y1="20" x2="200" y2="20" stroke="#9fc4c0" stroke-width="1.2" stroke-dasharray="3 3" opacity=".45"/>' +
       '<path class="bg-line-area" d="M0,48 L22,42 L44,46 L66,30 L88,36 L110,20 L132,28 L154,14 L176,22 L200,8 L200,60 L0,60 Z" ' +
         'fill="url(#dnkLineFill)" style="opacity:0;animation:dnkAreaIn .6s ease 1.1s forwards;"/>' +
-      '<path d="M0,48 L22,42 L44,46 L66,30 L88,36 L110,20 L132,28 L154,14 L176,22 L200,8" fill="none" stroke="#9fc4c0" stroke-width="2" ' +
+      '<path d="M0,48 L22,42 L44,46 L66,30 L88,36 L110,20 L132,28 L154,14 L176,22 L200,8" fill="none" stroke="#9fc4c0" stroke-width="2.6" ' +
         'stroke-linecap="round" stroke-linejoin="round" pathLength="1" ' +
         'style="stroke-dasharray:1;stroke-dashoffset:1;animation:dnkLineDraw 1.15s ease .5s forwards;"/>' +
       '<g class="bg-line-dots" style="opacity:0;animation:dnkDotsIn .4s ease 1.7s forwards;">' +
@@ -200,10 +206,10 @@
       // 실측 그래프처럼 보이도록 y축 눈금 숫자 3개 + 단위 라벨을 더했다(장식용 — 실제
       // 값과는 무관, 판독보다는 "계측기 화면" 인상을 주는 목적이라 작고 옅게 둔다).
       '<g class="bg-line-labels" style="opacity:0;animation:dnkDotsIn .4s ease 1.85s forwards;">' +
-        '<text x="3" y="9" font-size="5.5" fill="#9fc4c0" opacity=".55">6</text>' +
-        '<text x="3" y="22" font-size="5.5" fill="#9fc4c0" opacity=".55">3</text>' +
-        '<text x="3" y="52" font-size="5.5" fill="#9fc4c0" opacity=".55">0</text>' +
-        '<text x="197" y="8" font-size="5" fill="#9fc4c0" opacity=".45" text-anchor="end">mL/min</text>' +
+        '<text x="3" y="9" font-size="5.5" font-weight="700" fill="#9fc4c0" opacity=".85">6</text>' +
+        '<text x="3" y="22" font-size="5.5" font-weight="700" fill="#9fc4c0" opacity=".85">3</text>' +
+        '<text x="3" y="52" font-size="5.5" font-weight="700" fill="#9fc4c0" opacity=".85">0</text>' +
+        '<text x="197" y="8" font-size="5" font-weight="700" fill="#9fc4c0" opacity=".7" text-anchor="end">mL/min</text>' +
       '</g>' +
     '</svg>' +
     '<div class="bg-scrim"></div>' +
