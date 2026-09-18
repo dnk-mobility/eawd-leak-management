@@ -1743,9 +1743,12 @@
        묶을 수 없다. 잘못 입력했으면 삭제 후 다시 추가한다.
      ========================================================================= */
   var CALIB_KEY = "dnk_calib_ok_v1";
-  // 암호: calib-4720 (관리자 전용 — 바꾸려면 아래 명령으로 새 해시를 만들어 교체)
+  // 관리자 암호 — QR 정보관리 시스템의 2차 암호(그 저장소 gate.js의 HASH_2)와
+  // 같은 값으로 맞췄다(2026-09-19). 두 시스템에서 "한 단계 더 민감한 자료"를 여는
+  // 암호를 하나로 통일해 두면 담당자가 외울 것이 하나로 줄기 때문.
+  // 바꾸려면 아래 명령으로 새 해시를 만들어 교체:
   // node -e "console.log(require('crypto').createHash('sha256').update('새암호','utf8').digest('hex'))"
-  var CALIB_HASH = "f47fc8df1c84d31a9d81613108ceed3c4b83beeee16583e9a0e338a3c5fe2839";
+  var CALIB_HASH = "7f48af2476760863ede4e293e55f32fd304695e6f9e35b6b2888264a002ad6bf";
 
   function calibUnlocked() {
     try { return sessionStorage.getItem(CALIB_KEY) === "1"; } catch (e) { return false; }
