@@ -127,10 +127,12 @@
     // delay를 앞당기고(전에는 그래프가 다 그려진 2s 뒤에야 글자가 시작됐다), 글자가
     // 화면에 머무르는 느낌을 살리려 등장 시간(duration)도 함께 늘렸다(요청: "그래프
     // 등장할 때 같이 위에 글도 나오게 하고, 그 등장 타임을 조금 더 길게").
+    // 2026-09-21: "조금만 더 길게" 재요청 — duration을 한 단계 더 늘렸다(1.6/1.8/1s →
+    // 2.0/2.2/1.3s). delay(시작 시점)는 그대로 두어 그래프와 같이 나오는 느낌은 유지한다.
     ".intro-text{position:relative;z-index:2;text-align:center;padding:0 24px;}" +
-    ".intro-text .brand{color:#9fc4c0;font-size:11px;letter-spacing:.06em;margin-bottom:10px;opacity:0;animation:dnkUp 1.6s ease .6s forwards;}" +
-    ".intro-text .title{color:#fff;font-size:17px;font-weight:800;opacity:0;animation:dnkUp 1.8s ease .75s forwards;}" +
-    ".intro-text .rule{margin:13px auto 0;width:0;height:2px;background:#9fc4c0;animation:dnkRuleDraw 1s cubic-bezier(.4,0,.2,1) 1.1s forwards;}" +
+    ".intro-text .brand{color:#9fc4c0;font-size:11px;letter-spacing:.06em;margin-bottom:10px;opacity:0;animation:dnkUp 2s ease .6s forwards;}" +
+    ".intro-text .title{color:#fff;font-size:17px;font-weight:800;opacity:0;animation:dnkUp 2.2s ease .75s forwards;}" +
+    ".intro-text .rule{margin:13px auto 0;width:0;height:2px;background:#9fc4c0;animation:dnkRuleDraw 1.3s cubic-bezier(.4,0,.2,1) 1.1s forwards;}" +
     // 1단계 전용 요소를 2단계로 넘어가며 지울 때 쓰는 빠른 페이드(JS가 클래스를 붙인다).
     ".intro-fade-out{transition:opacity " + (SCENE_FADE_MS / 1000) + "s ease;opacity:0!important;}" +
     // 2단계 — 순수 암호 카드(브랜드·제목·입력칸). 1단계가 사라진 뒤 새로 나타난다.
