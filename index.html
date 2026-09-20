@@ -34,6 +34,10 @@
      혼동을 유발했다(요청·개선이력.md 참고). 두 토글은 setPeriod()에서 함께
      갱신된다(#periodSeg, #periodSeg2 둘 다 반영). */
   .period-seg-inline{max-width:220px;margin:0 14px 10px;}
+  /* 페이지 맨 위 month-bar와 같은 이전/다음 이동 버튼을 그래프 카드 안에도 둔다 —
+     주간 보기로 바꾼 뒤 다른 주로 이동하려면 맨 위까지 스크롤해야 했던 문제를
+     periodSeg2와 같은 이유로 해결한다(개선이력.md 참고). */
+  .month-bar-inline{max-width:none;margin:0 14px 10px;padding:0;}
 
   .month-bar{
     max-width:640px;margin:10px auto 0;padding:0 14px;
@@ -418,6 +422,14 @@
     <div class="seg period-seg-inline" id="periodSeg2">
       <button type="button" data-period="week">주간</button>
       <button type="button" data-period="month" class="on">월간</button>
+    </div>
+    <div class="month-bar month-bar-inline" id="monthBar2">
+      <button class="navbtn" id="prevM2" type="button" aria-label="이전">‹</button>
+      <div class="mv">
+        <span class="label" id="mLabel2">—</span>
+        <span class="meta" id="mMeta2">—</span>
+      </div>
+      <button class="navbtn" id="nextM2" type="button" aria-label="다음">›</button>
     </div>
     <div class="body" id="chartBody"></div>
   </details>
@@ -836,12 +848,13 @@
   function renderMonth() {
     var recs = periodRecs();
 
+    var label, nextDisabled;
     if (period === "week") {
-      $("mLabel").textContent = fmtMD(weekStart) + " ~ " + fmtMD(weekEndOf(weekStart));
-      $("nextM").disabled = weekStart >= mondayOf(todayStr());
+      label = fmtMD(weekStart) + " ~ " + fmtMD(weekEndOf(weekStart));
+      nextDisabled = weekStart >= mondayOf(todayStr());
     } else {
-      $("mLabel").textContent = parseInt(ym.slice(0, 4), 10) + "년 " + parseInt(ym.slice(5, 7), 10) + "월";
-      $("nextM").disabled = ym >= todayStr().slice(0, 7);
+      label = parseInt(ym.slice(0, 4), 10) + "년 " + parseInt(ym.slice(5, 7), 10) + "월";
+      nextDisabled = ym >= todayStr().slice(0, 7);
     }
 
     var days = {};
@@ -851,9 +864,16 @@
       r.items.forEach(function (it) { if (it.judge === "NG") ng++; });
     });
     var dayCount = Object.keys(days).length;
-    $("mMeta").textContent = dayCount === 0
+    var meta = dayCount === 0
       ? "기록 없음"
       : "점검 " + dayCount + "일 · " + recs.length + "회" + (ng ? " · NG " + ng + "건" : " · 전건 OK");
+
+    // 페이지 맨 위(#mLabel 등)와 그래프 카드 안(#mLabel2 등) 두 이동 바를 함께 갱신한다
+    // — periodSeg/periodSeg2와 같은 이유(그래프까지 스크롤한 상태에서도 주/월 이동이
+    // 되어야 한다는 요청, 개선이력.md 참고).
+    ["mLabel", "mLabel2"].forEach(function (id) { $(id).textContent = label; });
+    ["mMeta", "mMeta2"].forEach(function (id) { $(id).textContent = meta; });
+    ["nextM", "nextM2"].forEach(function (id) { $(id).disabled = nextDisabled; });
 
     $("listTitle").textContent = period === "week" ? "주별 기록" : "월별 기록";
   }
@@ -2879,6 +2899,8 @@
 
     $("prevM").addEventListener("click", function () { shiftPeriod(-1); });
     $("nextM").addEventListener("click", function () { shiftPeriod(1); });
+    $("prevM2").addEventListener("click", function () { shiftPeriod(-1); });
+    $("nextM2").addEventListener("click", function () { shiftPeriod(1); });
 
     document.querySelectorAll("#periodSeg, #periodSeg2").forEach(function (seg) {
       seg.addEventListener("click", function (e) {
