@@ -7,6 +7,15 @@
     node -e "console.log(require('crypto').createHash('sha256').update('새암호','utf8').digest('hex'))"
   - index.html은 QR 정보관리 시스템과 동일하게 window.dnkGate.ready 를 기다렸다가 화면을 그린다.
 
+  2026-09-21: 1단계(인트로) 연출을 "이 탭에서 이미 봤는지" 별도로 기록해(INTRO_KEY),
+  이미 인증되고 인트로도 본 탭이면 오버레이 자체를 만들지 않고 즉시 콘텐츠를 보여준다.
+  dashboard.html이 생기고 나서 대시보드↔채널을 링크로 오가는 일이 잦아졌는데, 그때마다
+  ~4초짜리 인트로가 매번 다시 재생돼 불편하다는 지적을 받아서다. "QR 찍을 때마다 인트로를
+  보고 싶다"(7차 이전 기록)는 요청은 진짜 새 QR 스캔(=새 탭, sessionStorage 초기화)에
+  대한 것으로 재해석했다 — 이미 열려 있는 탭 안에서 링크로 옮겨 다니는 것까지 포함한
+  요청은 아니었다고 본다. 인증 전이지만 인트로는 본 탭(드문 경우)은 1단계 없이 격자만
+  고정해 두고 바로 2단계(암호 카드)로 넘어간다.
+
   2026-09-19 (7차): QR 정보관리 시스템과 "개념이 다르다"는 지적을 받아, 화면 구조를
   QR 시스템(intro.js → gate.js)과 같은 **진짜 2단계**로 다시 짰다.
   - 이전 구조: 배경 애니메이션 위에 카드 하나만 있고, 그 카드 안에 브랜드·제목과
@@ -64,6 +73,15 @@
   "use strict";
 
   var KEY = "leak_trend_gate_ok_v1";
+  // 1단계(인트로) 연출을 "이 탭에서 이미 봤는지" 따로 기록하는 키 — 인증 여부(KEY)와는
+  // 별개다. 2026-09-21: dashboard.html이 생기면서 대시보드↔채널 사이를 링크로 오가는
+  // 일이 잦아졌는데, 그때마다 4초 가까운 인트로가 매번 다시 재생돼 불편하다는 지적을
+  // 받았다. "QR을 찍을 때마다 보고 싶다"는 이전 요청(아래 2026-09-19 기록)은 진짜
+  // 새 QR 스캔(=새 탭)에 대한 것이었지, 이미 열려 있는 탭 안에서 링크를 눌러 옮겨
+  // 다니는 것까지 포함한 게 아니었다고 보고 이렇게 나눴다. 이 값도 KEY와 똑같이
+  // sessionStorage라 탭을 닫으면 초기화된다 — 다음에 QR을 다시 찍어 새 탭이 열리면
+  // 인트로가 다시 재생된다.
+  var INTRO_KEY = "leak_trend_intro_shown_v1";
   var PASS_HASH = "6712da30aaaa05bee4d101db4fd64542e8ac7176769bab88f87e826456678fa9";
 
   // 연출 속도를 조정할 때는 TAIL_MS부터 만진다.
@@ -91,6 +109,20 @@
     } catch (e) {}
   }
 
+  function introShown() {
+    try {
+      return sessionStorage.getItem(INTRO_KEY) === "1";
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function markIntroShown() {
+    try {
+      sessionStorage.setItem(INTRO_KEY, "1");
+    } catch (e) {}
+  }
+
   function sha256Hex(text) {
     var buf = new TextEncoder().encode(text);
     return crypto.subtle.digest("SHA-256", buf).then(function (hash) {
@@ -105,6 +137,16 @@
   document.documentElement.style.visibility = "hidden";
 
   var already = isUnlocked();
+  var skipIntro = introShown();
+
+  // 이미 인증된 탭에서, 이 탭이 1단계(인트로)를 이미 한 번 본 상태라면 — 전형적으로
+  // 대시보드↔채널 사이를 링크로 옮겨 다니는 경우 — 오버레이 자체를 만들지 않고 바로
+  // 콘텐츠를 보여준다. 스타일 주입도, 애니메이션 대기도 전혀 하지 않는 가장 빠른 경로.
+  if (already && skipIntro) {
+    document.documentElement.style.visibility = "visible";
+    window.dnkGate = { ready: Promise.resolve(true), passHash: PASS_HASH, sha256Hex: sha256Hex };
+    return;
+  }
 
   var style = document.createElement("style");
   style.textContent =
@@ -172,11 +214,18 @@
   wrap.id = "dnk-gate";
   wrap.setAttribute("role", "dialog");
   wrap.setAttribute("aria-modal", "true");
-  wrap.setAttribute("aria-labelledby", "dnk-gate-introTitle");
+  wrap.setAttribute("aria-labelledby", skipIntro ? "dnk-gate-title" : "dnk-gate-introTitle");
 
+  // skipIntro && !already(위 빠른 경로에서 already는 걸러졌으니 여기 오면 항상 false다) —
+  // 이 탭에서 1단계는 이미 봤지만 아직 인증 전인 드문 경우. 1단계 연출 없이 격자·음영만
+  // 고정 상태로 깔아 둔다 — 아래에서 finishPhase1()을 바로 불러 showPasswordScene()으로
+  // 넘어가면, 지울 1단계 요소가 없으니 그대로 짧은 대기 뒤 암호 카드만 뜬다.
   // 1단계 — 격자·스캔·꺾은선 그래프(디테일 보강: 지점 10개, 기준선, 면적 채우기,
   // 축 눈금 숫자 — "더 전문적이고 멋있게" 요청) + 브랜드·설비명·밑줄. 입력칸 없음.
-  wrap.innerHTML =
+  wrap.innerHTML = skipIntro ?
+    '<div class="bg-grid" style="opacity:1;animation:none;"></div>' +
+    '<div class="bg-grid-major" style="opacity:1;animation:none;"></div>' +
+    '<div class="bg-scrim" style="opacity:1;animation:none;"></div>' :
     '<div class="bg-grid"></div>' +
     '<div class="bg-grid-major"></div>' +
     '<div class="bg-scan"></div>' +
@@ -310,6 +359,7 @@
   function finishPhase1() {
     if (phase1Done) return;
     phase1Done = true;
+    markIntroShown(); // 다음 내부 이동(대시보드↔채널)부터는 1단계를 건너뛴다
     if (already) {
       revealApp();
     } else {
@@ -317,35 +367,41 @@
     }
   }
 
-  // 고정 타이머로 "몇 초 뒤 종료"를 재지 않는다. 최초 로드 때 애니메이션 시작이
-  // 수백 ms 밀리면 마지막 동작이 잘리고, delay·duration을 나중에 조정하면 어느
-  // 것이 가장 늦게 끝나는지가 바뀌기 때문. 그래서 끝난 개수를 센다.
-  // wrap에서 발생하는 모든 animationend가 이 카운트를 깎으므로(아래 리스너가
-  // 선택자로 걸러 듣지 않음), 1단계에 애니메이션이 걸린 요소를 새로 추가할 때마다
-  // 이 목록도 같이 늘려야 한다 — 안 그러면 실제보다 이르게 pending이 0이 되어
-  // 뒤에 남은 애니메이션이 안 끝났는데도 2단계로 먼저 넘어가 버린다.
-  var animated = wrap.querySelectorAll(
-    ".bg-grid,.bg-grid-major,.bg-scan,.bg-line path,.bg-line-area,.bg-line-dots,.bg-line-labels,.intro-text .brand,.intro-text .title,.intro-text .rule"
-  );
-  var pending = animated.length;
-
-  // 동작 줄이기 설정이면 CSS가 애니메이션을 꺼버려 animationend가 아예 오지 않는다.
-  // (화면을 건너뛰라는 뜻이 아니라, 끝을 셀 수 없으니 시간으로 재야 한다는 뜻 —
-  //  연출 화면 자체는 이 경우에도 항상 보여준다.)
-  var reduceMotion = false;
-  try {
-    reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  } catch (e) {}
-
-  if (reduceMotion || !pending) {
-    setTimeout(finishPhase1, TAIL_MS + 600);
+  if (skipIntro) {
+    // 1단계 마크업 자체를 안 그렸으니(위에서 격자·음영만 깔았다) 기다릴 애니메이션이
+    // 없다 — 곧바로 2단계로 넘어간다(already는 여기서 항상 false).
+    finishPhase1();
   } else {
-    var safety = setTimeout(finishPhase1, TIMEOUT_MS);
-    wrap.addEventListener("animationend", function () {
-      pending -= 1;
-      if (pending > 0) return;
-      clearTimeout(safety);
-      setTimeout(finishPhase1, TAIL_MS);
-    });
+    // 고정 타이머로 "몇 초 뒤 종료"를 재지 않는다. 최초 로드 때 애니메이션 시작이
+    // 수백 ms 밀리면 마지막 동작이 잘리고, delay·duration을 나중에 조정하면 어느
+    // 것이 가장 늦게 끝나는지가 바뀌기 때문. 그래서 끝난 개수를 센다.
+    // wrap에서 발생하는 모든 animationend가 이 카운트를 깎으므로(아래 리스너가
+    // 선택자로 걸러 듣지 않음), 1단계에 애니메이션이 걸린 요소를 새로 추가할 때마다
+    // 이 목록도 같이 늘려야 한다 — 안 그러면 실제보다 이르게 pending이 0이 되어
+    // 뒤에 남은 애니메이션이 안 끝났는데도 2단계로 먼저 넘어가 버린다.
+    var animated = wrap.querySelectorAll(
+      ".bg-grid,.bg-grid-major,.bg-scan,.bg-line path,.bg-line-area,.bg-line-dots,.bg-line-labels,.intro-text .brand,.intro-text .title,.intro-text .rule"
+    );
+    var pending = animated.length;
+
+    // 동작 줄이기 설정이면 CSS가 애니메이션을 꺼버려 animationend가 아예 오지 않는다.
+    // (화면을 건너뛰라는 뜻이 아니라, 끝을 셀 수 없으니 시간으로 재야 한다는 뜻 —
+    //  연출 화면 자체는 이 경우에도 항상 보여준다.)
+    var reduceMotion = false;
+    try {
+      reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    } catch (e) {}
+
+    if (reduceMotion || !pending) {
+      setTimeout(finishPhase1, TAIL_MS + 600);
+    } else {
+      var safety = setTimeout(finishPhase1, TIMEOUT_MS);
+      wrap.addEventListener("animationend", function () {
+        pending -= 1;
+        if (pending > 0) return;
+        clearTimeout(safety);
+        setTimeout(finishPhase1, TAIL_MS);
+      });
+    }
   }
 })();
