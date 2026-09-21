@@ -3,6 +3,8 @@
 
 2026-09-18: 전체계(130·190)를 하우징/인버터 채널로 분리해 4개 -> 6개.
 eq 키는 index.html 의 EQ_IDS 와 반드시 같아야 한다.
+2026-09-21: 대시보드(전체 현황, dashboard.html) QR을 추가했다 — 6개 채널
+QR과 별개로, 관리자가 한 화면에서 전체 채널을 훑어볼 때 이 QR로 바로 들어간다.
 """
 import os
 import qrcode
@@ -25,3 +27,9 @@ for eq, label in CHANNELS:
     path = os.path.join(OUT, "eq-%s.png" % eq)
     img.save(path)
     print("%-8s %-16s -> %s" % (eq, label, url))
+
+dash_url = BASE + "dashboard.html"
+dash_img = qrcode.make(dash_url, box_size=10, border=4)
+dash_path = os.path.join(OUT, "dashboard.png")
+dash_img.save(dash_path)
+print("%-8s %-16s -> %s" % ("dash", "전체 현황", dash_url))

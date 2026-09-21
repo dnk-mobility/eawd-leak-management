@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<title>전체 현황 · e-AWD 모터 하우징 누설값 관리 시스템</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  /*
+    전체 현황(대시보드) — 6개 채널을 한 화면에서 요약해서 보여주고, 카드를 누르면
+    그 채널의 상세 화면(index.html?eq=..)으로 이동한다.
+
+    설계 배경 (2026-09-21):
+    - 기존 index.html은 "QR 하나 = 채널 하나"를 전제로 한 단일 채널 화면이라,
+      6개 채널을 한 화면에서 훑어보려면 QR을 6번 찍어야 했다. 관리자가 "오늘 어디가
+      문제인지" 보려면 불편하다는 지적을 받아 이 화면을 새로 만들었다.
+    - index.html에 "채널 없음" 모드를 끼워 넣는 대신 완전히 별도 파일로 뒀다 —
+      index.html은 2900줄 넘게 단일 채널(eqId) 전제로 짜여 있어, 그 안에 분기를
+      추가하면 현장 작업자가 매일 쓰는 핵심 흐름(QR→즉시 입력)을 건드릴 위험이 있다.
+      새 화면 하나를 따로 만드는 편이 기존 화면을 훨씬 덜 건드린다.
+    - 접근 권한은 다른 채널 화면과 동일한 1차 접속 암호 하나로 통일한다(요청) —
+      사내 직원 전체가 대시보드·채널 상세 모두 같은 암호로 볼 수 있다. 보정이력
+      입력·잠금만 기존처럼 별도 관리자 암호가 필요하다(이 화면은 손대지 않음).
+    - EQ/judge()/detectTrend() 등은 index.html에도 같은 로직이 있다 — 이 파일
+      스코프에서는 그 함수에 접근할 수 없어(별도 <script>) 여기 똑같이 하나 더
+      둔다(gate.js가 sha256Hex를 index.html에 넘겨주는 것과 다르게, 이건 앱 로직이라
+      넘겨줄 마땅한 자리가 없다). **판정 기준(judge)이나 이상탐지 규칙(detectTrend)을
+      고치면 index.html과 이 파일 양쪽을 다 고쳐야 한다** — 벗어나면 대시보드와
+      상세 화면의 판정이 서로 달라지는 조용한 버그가 된다.
+  */
+  body{margin:0;background:var(--white);}
+  .d-hero{
+    background:linear-gradient(135deg,#173f3e 0%,#1b4a49 45%,#2f6e6c 100%);
+    padding:22px 16px 28px;color:#fff;position:relative;overflow:hidden;
+  }
+  .d-hero::before{
+    content:"";position:absolute;top:-60px;right:-40px;width:200px;height:200px;
+    border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.10) 0%,rgba(255,255,255,0) 70%);
+  }
+  .d-hero::after{
+    content:"";position:absolute;bottom:-70px;left:-40px;width:180px;height:180px;
+    border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.06) 0%,rgba(255,255,255,0) 70%);
+  }
+  .d-hero-inner{position:relative;max-width:640px;margin:0 auto;}
+  .d-hero .brand{font-size:11px;font-weight:700;color:#bfe0dc;letter-spacing:.07em;}
+  .d-hero .title{font-size:21px;font-weight:800;margin-top:4px;letter-spacing:-.01em;}
+  .d-hero .meta{font-size:12px;color:#cfe6e2;margin-top:4px;}
+
+  .stat-strip{
+    display:flex;gap:8px;max-width:640px;margin:-16px auto 0;padding:0 16px;position:relative;z-index:3;
+  }
+  .stat-chip{
+    flex:1;background:var(--white);border-radius:13px;padding:10px 6px 9px;text-align:center;
+    box-shadow:0 6px 16px rgba(43,38,33,.12);border:1px solid var(--line);
+  }
+  .stat-chip .n{font-size:19px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums;}
+  .stat-chip .l{font-size:9.5px;color:var(--gray-500);font-weight:700;margin-top:3px;letter-spacing:.02em;}
+  .stat-chip.ok .n{color:var(--ok-text);}
+  .stat-chip.ng .n{color:#8a3226;}
+  .stat-chip.wait .n{color:var(--gray-700);}
+
+  .d-list{max-width:640px;margin:0 auto;padding:16px 16px 40px;}
+  .d-note{font-size:11.5px;color:var(--warn-text);background:var(--warn-bg);border-radius:8px;padding:9px 11px;margin-bottom:12px;}
+
+  .d-card{
+    position:relative;overflow:hidden;display:block;text-decoration:none;color:inherit;
+    background:var(--white);border:1px solid var(--line);border-radius:12px;
+    padding:13px 13px 11px 17px;margin:0 0 11px;box-shadow:0 3px 10px rgba(43,38,33,.06);
+    cursor:pointer;
+  }
+  .d-card:active{background:#faf6ee;}
+  .d-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--gray-300);}
+  .d-card.ok::before{background:#4a8f3e;}
+  .d-card.ng::before{background:#b8453a;}
+  .d-card.wait::before{background:var(--gray-400);}
+  .d-row1{display:flex;align-items:center;gap:8px;}
+  .d-badge{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:800;padding:3px 8px;border-radius:999px;flex-shrink:0;}
+  .d-badge.ok{background:var(--ok-bg);color:var(--ok-text);}
+  .d-badge.ng{background:#f6ddd8;color:#8a3226;}
+  .d-badge.wait{background:var(--gray-200);color:var(--gray-700);}
+  .d-badge.ng .txt{animation:dBadgePulse 1.3s ease-in-out infinite;}
+  @keyframes dBadgePulse{0%,100%{opacity:1;}50%{opacity:.45;}}
+  @media (prefers-reduced-motion:reduce){ .d-badge.ng .txt{animation:none;} }
+  .d-name{font-size:13.5px;font-weight:800;color:var(--gray-900);}
+  .d-no{font-size:10.5px;color:var(--gray-400);}
+  .d-chev{margin-left:auto;color:var(--gray-400);font-size:15px;}
+  .d-spark{width:100%;height:46px;margin-top:9px;display:block;}
+  .d-foot{font-size:11px;color:var(--gray-700);margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .d-flag{font-size:10px;font-weight:800;color:var(--warn-text);background:var(--warn-bg);padding:1px 6px;border-radius:5px;}
+  .d-empty{font-size:11px;color:var(--gray-400);margin-top:9px;padding:10px 0;text-align:center;}
+
+  .d-back{
+    display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:var(--navy);
+    text-decoration:none;padding:8px 4px;
+  }
+
+  footer{max-width:640px;margin:0 auto;padding:12px 16px 32px;text-align:center;color:var(--gray-500);font-size:11px;line-height:1.6;}
+</style>
+</head>
+<body>
+<script src="gate.js"></script>
+<script src="leak-sync.js"></script>
+
+<noscript><style>body{visibility:hidden!important;}</style><div style="position:fixed;inset:0;z-index:999999;background:#1b4a49;color:#fff;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Malgun Gothic','Apple SD Gothic Neo',sans-serif;font-size:14px;line-height:1.6;">이 페이지는 자바스크립트가 필요합니다.<br>브라우저 설정에서 자바스크립트를 켠 뒤 다시 열어주세요.</div></noscript>
+
+<div class="d-hero">
+  <div class="d-hero-inner">
+    <div class="brand">DnK MOBILITY · 후공정 생산기술팀</div>
+    <div class="title">e-AWD 70kW 모터 하우징 — 전체 현황</div>
+    <div class="meta" id="dMeta">6개 채널 · 불러오는 중…</div>
+  </div>
+</div>
+
+<div class="stat-strip" id="statStrip">
+  <div class="stat-chip ok"><div class="n" id="stOk">—</div><div class="l">정상</div></div>
+  <div class="stat-chip ng"><div class="n" id="stNg">—</div><div class="l">NG</div></div>
+  <div class="stat-chip wait"><div class="n" id="stWait">—</div><div class="l">미점검</div></div>
+</div>
+
+<div class="d-list" id="dList">
+  <!-- JS가 채널 카드를 채운다 -->
+</div>
+
+<footer>
+  DnK MOBILITY · 후공정 생산기술팀<br>
+  본 페이지는 사내 품질관리 목적으로 관리됩니다
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  /* =========================================================================
+     index.html과 중복되는 부분 — 위 파일 상단 주석 참고
+     ========================================================================= */
+  var EQ = {
+    "120":   { tab: "조립전 유로계",         title: "조립전 유로계 리크검사기" },
+    "130-h": { tab: "조립전 전체계(하우징)", title: "조립전 전체계 리크검사기 — 하우징" },
+    "130-i": { tab: "조립전 전체계(인버터)", title: "조립전 전체계 리크검사기 — 인버터" },
+    "180":   { tab: "조립후 유로계",         title: "조립후 유로계 리크검사기" },
+    "190-h": { tab: "조립후 전체계(하우징)", title: "조립후 전체계 리크검사기 — 하우징" },
+    "190-i": { tab: "조립후 전체계(인버터)", title: "조립후 전체계 리크검사기 — 인버터" }
+  };
+  var EQ_IDS = ["120", "130-h", "130-i", "180", "190-h", "190-i"];
+  var STORE_KEY = "dnk_leak_master_v1";
+
+  function $(id) { return document.getElementById(id); }
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+  function todayStr() {
+    var d = new Date();
+    return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+  }
+  function curYm() { return todayStr().slice(0, 7); }
+  function esc(s) {
+    return String(s === null || s === undefined ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function judge(v, lsl, usl) {
+    if (v === null) return "-";
+    if (lsl === null && usl === null) return "-";
+    if (lsl !== null && v < lsl) return "NG";
+    if (usl !== null && v > usl) return "NG";
+    return "OK";
+  }
+  function mean(arr) { return arr.reduce(function (a, b) { return a + b; }, 0) / arr.length; }
+  function stdev(arr, m) {
+    if (arr.length < 2) return 0;
+    var mm = m === undefined ? mean(arr) : m;
+    var sq = arr.reduce(function (a, b) { return a + (b - mm) * (b - mm); }, 0);
+    return Math.sqrt(sq / (arr.length - 1));
+  }
+  var TREND_EPS = 1e-9;
+  // index.html의 detectTrend()에서 "이유 설명 문장"만 뺀 축소판 — 대시보드는
+  // 이상 신호가 있는지 없는지(⚠ 표시)만 필요하고, 근거 문장은 상세 화면에서 본다.
+  function hasAnomaly(vals) {
+    var n = vals.length;
+    if (n < 6) return false;
+    var m = mean(vals);
+
+    // [1] 연속 추세 — 최근 값이 6회 연속 계속 커지거나 계속 작아짐
+    var trendRun = 1, trendDir = 0, trendHit = false;
+    for (var i = n - 1; i > 0; i--) {
+      var d1 = vals[i] > vals[i - 1] ? 1 : vals[i] < vals[i - 1] ? -1 : 0;
+      if (i === n - 1) { trendDir = d1; if (!d1) break; trendRun = 2; continue; }
+      if (d1 === trendDir) trendRun++; else break;
+    }
+    if (trendDir && trendRun >= 6) trendHit = true;
+    if (trendHit) return true;
+
+    // [2] 평균 한쪽 쏠림 — 최근 값이 8회 연속 평균의 한쪽에만 있음
+    var sideRun = 1, side = 0, sideHit = false;
+    for (var j = n - 1; j >= 0; j--) {
+      var d2 = vals[j] > m + TREND_EPS ? 1 : vals[j] < m - TREND_EPS ? -1 : 0;
+      if (j === n - 1) { side = d2; if (!d2) break; continue; }
+      if (d2 === side) sideRun++; else break;
+    }
+    if (side && sideRun >= 8) sideHit = true;
+    if (sideHit) return true;
+
+    // [3] 변동성 급증 — 최근 5회의 표준편차가 그 이전 구간의 1.8배 초과
+    if (n >= 10) {
+      var recent = vals.slice(-5), base = vals.slice(0, -5);
+      var sdRecent = stdev(recent), sdBase = stdev(base);
+      if (sdBase > TREND_EPS && sdRecent > sdBase * 1.8) return true;
+    }
+    return false;
+  }
+
+  /* =========================================================================
+     데이터 준비 — 이 폰의 로컬 캐시를 먼저 쓰고, 연동이 켜져 있으면 최신값으로 덮는다
+     ========================================================================= */
+  function loadLocal() {
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      var db = raw ? JSON.parse(raw) : null;
+      if (!db || !db.eq) db = { v: 1, eq: {} };
+      EQ_IDS.forEach(function (id) {
+        if (!db.eq[id]) db.eq[id] = { samples: [], recs: [] };
+      });
+      return db;
+    } catch (e) {
+      var empty = { v: 1, eq: {} };
+      EQ_IDS.forEach(function (id) { empty.eq[id] = { samples: [], recs: [] }; });
+      return empty;
+    }
+  }
+
+  function channelStats(e) {
+    var ym = curYm(), today = todayStr();
+    var monthRecs = e.recs.filter(function (r) { return r.date.slice(0, 7) === ym; });
+    var todayRecs = monthRecs.filter(function (r) { return r.date === today; });
+
+    var ngCount = 0;
+    monthRecs.forEach(function (r) { r.items.forEach(function (it) { if (it.judge === "NG") ngCount++; }); });
+
+    var todayStatus = "wait";
+    if (todayRecs.length) {
+      var anyNg = todayRecs.some(function (r) { return r.items.some(function (it) { return it.judge === "NG"; }); });
+      todayStatus = anyNg ? "ng" : "ok";
+    }
+
+    // 미니 그래프·이상신호는 대표로 첫 샘플 하나만 쓴다(카드 하나에 여러 샘플을
+    // 다 넣으면 좁은 화면에서 복잡해진다 — 나머지는 상세 화면에서 확인).
+    var s0 = e.samples && e.samples[0];
+    var pts = [];
+    if (s0) {
+      monthRecs.slice().sort(function (a, b) {
+        return a.date === b.date ? (a.shift === b.shift ? 0 : a.shift === "야간" ? 1 : -1) : (a.date < b.date ? -1 : 1);
+      }).forEach(function (r) {
+        r.items.forEach(function (it) { if (it.sid === s0.id && it.v !== null) pts.push(it.v); });
+      });
+    }
+    var anomaly = hasAnomaly(pts);
+
+    return { todayStatus: todayStatus, ngCount: ngCount, recordCount: monthRecs.length, pts: pts, anomaly: anomaly, sampleName: s0 ? s0.name : "" };
+  }
+
+  function sparkSvg(pts, status) {
+    if (pts.length < 2) return null;
+    var W = 100, H = 34, base = 32;
+    var lo = Math.min.apply(null, pts), hi = Math.max.apply(null, pts);
+    var span = hi - lo;
+    if (span === 0) { span = Math.max(Math.abs(hi) * 0.2, 1); }
+    lo -= span * 0.15; hi += span * 0.15;
+    function X(i) { return pts.length === 1 ? W / 2 : (W * i) / (pts.length - 1); }
+    function Y(v) { return 2 + (base - 2) * (1 - (v - lo) / (hi - lo)); }
+    var color = status === "ng" ? "#b8453a" : status === "wait" ? "#b3a896" : "#2f6e6c";
+    // polyline points="x,y x,y .." 형식과 path d="M.. L.." 형식은 문법이 다르다
+    // (구현 중 자체 발견 — 처음엔 둘을 한 변수로 같이 쓰려다 <polyline>에 속성이
+    // 두 번 들어가는 잘못된 마크업이 됐다). 각자 맞는 형식으로 따로 만든다.
+    var pointsAttr = pts.map(function (v, i) { return X(i).toFixed(1) + "," + Y(v).toFixed(1); }).join(" ");
+    var pathLine = pts.map(function (v, i) { return X(i).toFixed(1) + "," + Y(v).toFixed(1); }).join(" L");
+    var areaD = "M" + X(0).toFixed(1) + "," + base + " L" + pathLine + " L" + X(pts.length - 1).toFixed(1) + "," + base + " Z";
+    var gid = "dg" + Math.random().toString(36).slice(2, 8);
+    var ticks = pts.map(function (v, i) {
+      var x = X(i).toFixed(1);
+      return '<line x1="' + x + '" y1="' + base + '" x2="' + x + '" y2="' + (base + 2) + '" stroke="#c9bea6" stroke-width="0.6"/>';
+    }).join("");
+    var last = pts.length - 1;
+    return '<svg class="d-spark" viewBox="0 0 100 34" preserveAspectRatio="none">' +
+      '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="' + color + '" stop-opacity=".2"/>' +
+      '<stop offset="100%" stop-color="' + color + '" stop-opacity="0"/></linearGradient></defs>' +
+      '<line x1="0" y1="' + base + '" x2="100" y2="' + base + '" stroke="#e6dfd0" stroke-width="0.8"/>' +
+      ticks +
+      '<path d="' + areaD + '" fill="url(#' + gid + ')"/>' +
+      '<polyline points="' + pointsAttr + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '<circle cx="' + X(last).toFixed(1) + '" cy="' + Y(pts[last]).toFixed(1) + '" r="2.6" fill="' + color + '" stroke="#fff" stroke-width=".8"/>' +
+      "</svg>";
+  }
+
+  function renderCard(id, e) {
+    var st = channelStats(e);
+    var badgeTxt = st.todayStatus === "ok" ? "OK" : st.todayStatus === "ng" ? "NG" : "미점검";
+    var badgeHtml = st.todayStatus === "ng"
+      ? '<span class="d-badge ng"><span class="txt">NG</span></span>'
+      : '<span class="d-badge ' + st.todayStatus + '">' + badgeTxt + '</span>';
+    var spark = sparkSvg(st.pts, st.todayStatus);
+    var flag = st.anomaly ? '<span class="d-flag">⚠ 추이 이상</span>' : "";
+    var footText = st.todayStatus === "wait"
+      ? "이번 달 NG " + st.ngCount + "건 · 오늘 아직 입력 없음"
+      : "이번 달 NG " + st.ngCount + "건 · " + st.recordCount + "회 기록";
+    // 그래프는 대표 샘플(samples[0]) 하나만 쓰지만, NG 건수·기록 횟수는 그 채널의
+    // 모든 샘플을 합친 값이다 — 그래서 "이번 달 NG 1건"인데 그래프는 비어 있을 수
+    // 있다(NG가 다른 샘플에서 났을 때). 이 경우 "이번 달 기록이 아직 없습니다"라고
+    // 하면 바로 아래 NG 건수 문구와 모순돼 보인다(구현 중 실제 데이터로 재현해
+    // 발견). 전체 기록 유무(recordCount)로 문구를 나눠 모순을 없앤다.
+    var emptyMsg = st.recordCount === 0
+      ? "이번 달 기록이 아직 없습니다"
+      : "대표 샘플(" + esc(st.sampleName || "-") + ") 그래프를 그릴 데이터가 부족합니다";
+
+    return '<a class="d-card ' + st.todayStatus + '" href="index.html?eq=' + encodeURIComponent(id) + '">' +
+      '<div class="d-row1">' + badgeHtml +
+        '<span class="d-name">' + esc(EQ[id].tab) + '</span>' +
+        '<span class="d-no">' + esc(id) + '</span>' +
+        '<span class="d-chev">›</span>' +
+      '</div>' +
+      (spark || '<div class="d-empty">' + emptyMsg + '</div>') +
+      '<div class="d-foot">' + footText + (flag ? " " + flag : "") + '</div>' +
+      '</a>';
+  }
+
+  function renderAll(db, offlineNote) {
+    var ok = 0, ng = 0, wait = 0;
+    var html = "";
+    EQ_IDS.forEach(function (id) {
+      var e = db.eq[id];
+      var st = channelStats(e);
+      if (st.todayStatus === "ok") ok++; else if (st.todayStatus === "ng") ng++; else wait++;
+      html += renderCard(id, e);
+    });
+    $("stOk").textContent = ok;
+    $("stNg").textContent = ng;
+    $("stWait").textContent = wait;
+    $("dList").innerHTML = (offlineNote ? '<div class="d-note">' + esc(offlineNote) + '</div>' : "") + html;
+    $("dMeta").textContent = "6개 채널 · " + todayStr() + " 기준";
+  }
+
+  function boot() {
+    var db = loadLocal();
+    var sync = window.dnkSync;
+    var ym = curYm();
+
+    if (!sync || !sync.enabled()) {
+      renderAll(db, "구글시트 연동이 꺼져 있어, 이 폰에 저장된 채널만 보입니다. 다른 폰이 담당하는 채널은 기록이 없는 것처럼 보일 수 있습니다.");
+      return;
+    }
+
+    renderAll(db); // 우선 로컬 캐시로 즉시 그려서 빈 화면을 보여주지 않는다
+    $("dMeta").textContent = "6개 채널 · 불러오는 중…";
+
+    var failed = [];
+    Promise.all(EQ_IDS.map(function (id) {
+      return sync.pull(id, ym).then(function (data) {
+        if (data.samples && data.samples.length) {
+          db.eq[id].samples = data.samples.map(function (s) {
+            return { id: s.id, name: s.name, type: s.type === "NG" ? "NG" : "OK",
+                     nominal: s.nominal, lsl: s.lsl, usl: s.usl };
+          });
+        }
+        db.eq[id].recs = (db.eq[id].recs || []).filter(function (r) { return r.date.slice(0, 7) !== ym; })
+          .concat(data.recs || []);
+      }, function () {
+        failed.push(EQ[id].tab);
+      });
+    })).then(function () {
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(db)); } catch (e) {}
+      renderAll(db, failed.length ? ("일부 채널을 불러오지 못했습니다(" + failed.join(", ") + ") — 그 채널은 이 폰의 이전 기록으로 표시됩니다.") : null);
+    });
+  }
+
+  var ready = (window.dnkGate && window.dnkGate.ready) || Promise.resolve();
+  ready.then(boot);
+})();
+</script>
+</body>
+</html>
