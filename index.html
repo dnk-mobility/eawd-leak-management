@@ -961,7 +961,14 @@
       while (m > 12) { m -= 12; y += 1; }
       ym = y + "-" + pad2(m);
     }
-    renderAll();
+    // 이전엔 renderAll()을 통째로 불렀는데, 이 함수는 그래프/기록표가 보여주는
+    // "기간"만 바꿀 뿐 등록된 마스터 샘플 목록·스펙·보정이력·연동 설정 같은
+    // 나머지 화면은 전혀 바뀌지 않는다. renderAll() 안의 renderInput()이 매번
+    // ①의 입력칸들을 통째로 새로 그리는 부작용까지 있어서, 사용자가 오늘 값을
+    // 반쯤 입력해 둔 채로 그래프를 다른 주/달로 옮기면 그 입력값이 조용히
+    // 지워질 위험도 있었다(최적화 겸 잠재적 버그 수정, 2026-09-22). 실제로
+    // 이 "기간 이동"에 의존하는 화면은 ②그래프·③월별 기록뿐이다.
+    renderMonth(); renderChart(); renderList();
     syncNow("auto");
   }
 
@@ -973,7 +980,8 @@
     document.querySelectorAll("#periodSeg button, #periodSeg2 button").forEach(function (b) {
       b.classList.toggle("on", b.getAttribute("data-period") === period);
     });
-    renderAll();
+    // shiftPeriod()와 같은 이유로 renderAll() 대신 좁혀서 부른다(위 주석 참고).
+    renderMonth(); renderChart(); renderList();
     syncNow("auto");
   }
 

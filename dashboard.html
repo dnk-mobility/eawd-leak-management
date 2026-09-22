@@ -405,8 +405,7 @@
       "</svg>";
   }
 
-  function renderCard(id, e) {
-    var st = channelStats(e);
+  function renderCard(id, st) {
     var badgeTxt = st.todayStatus === "ok" ? "OK" : st.todayStatus === "ng" ? "NG" : "미점검";
     var badgeHtml = st.todayStatus === "ng"
       ? '<span class="d-badge ng"><span class="txt">NG</span></span>'
@@ -440,10 +439,12 @@
     var ok = 0, ng = 0, wait = 0;
     var html = "";
     EQ_IDS.forEach(function (id) {
-      var e = db.eq[id];
-      var st = channelStats(e);
+      // channelStats()는 그 채널의 기록 전체를 훑는 계산이라(추이 이상 신호
+      // 판정까지 포함), 카드 하나당 한 번만 돌린다 — 이전엔 여기(집계용)와
+      // renderCard() 안(카드 내용용)에서 같은 채널에 대해 두 번씩 호출했다.
+      var st = channelStats(db.eq[id]);
       if (st.todayStatus === "ok") ok++; else if (st.todayStatus === "ng") ng++; else wait++;
-      html += renderCard(id, e);
+      html += renderCard(id, st);
     });
     $("stOk").textContent = ok;
     $("stNg").textContent = ng;
