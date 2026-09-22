@@ -266,7 +266,7 @@
     '<div class="bg-scrim"></div>' +
     '<div class="intro-text">' +
       '<div class="brand">DnK MOBILITY · 후공정 생산기술팀</div>' +
-      '<div class="title" id="dnk-gate-introTitle">e-AWD 70kW 모터 하우징<br>마스터 누설값 관리 시스템</div>' +
+      '<div class="title" id="dnk-gate-introTitle">e-AWD 70kW 모터 하우징<br>리크 마스터 샘플 기록관리 시스템</div>' +
       '<div class="rule"></div>' +
     '</div>';
   document.documentElement.appendChild(wrap);
