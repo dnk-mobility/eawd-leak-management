@@ -1398,6 +1398,22 @@
       "측정 전 안정화 대기시간 미준수",
       "시편 장착 시 이물질·오염 개입",
       "설비 주변 진동·환경 변화"
+    ],
+    zigzag: [
+      "서로 다른 두 작업자·두 교대가 번갈아 측정하며 절차·습관이 다름",
+      "비슷한 이름의 마스터 샘플 두 개를 번갈아 사용하고 있을 가능성(라벨 확인)",
+      "측정 사이 안정화 시간이 부족해 직전 측정의 여파가 남아 다음 값이 반대로 튐",
+      "디텍터 보정이 매 측정마다 다시 걸려 값이 오락가락함 — ⑤보정 이력 시점 대조"
+    ],
+    lowVariation: [
+      "실제 측정 없이 이전 값을 복사하거나 그대로 재입력하고 있을 가능성 — 확인자에게 문의",
+      "디텍터 감도 저하로 실제 변화를 못 잡아내고 있을 가능성(교정 점검 필요)",
+      "그럴 만한 이유가 없다면 공정이 실제로 매우 안정된 것일 수 있음(반드시 나쁜 신호는 아님)"
+    ],
+    mixture: [
+      "이름이 비슷한 서로 다른 두 마스터 샘플의 값이 한 항목에 섞여 기록되고 있을 가능성",
+      "교대(주간/야간)마다 서로 다른 기준·지그가 적용되고 있을 가능성",
+      "샘플 선택 실수로 다른 샘플의 값이 섞였을 가능성 — 최근 기록의 샘플명 확인"
     ]
   };
 
@@ -1531,12 +1547,146 @@
       }
     }
 
+    // [5] 지그재그(교대 반복) 패턴 — 최근 14회가 오르내림을 한 번도 안 거르고
+    // 정확히 번갈아 반복함(Nelson Rule 4). 추세(한쪽으로만 계속) 나 변동성 급증
+    // (불규칙하게 들쭉날쭉)과는 다른 패턴이다 — "규칙적으로" 오르내리는 건
+    // 우연이라기엔 너무 정교해서, 보통 서로 다른 두 조건이 번갈아 섞여 있다는
+    // 뜻이다(예: 두 작업자, 두 지그, 두 샘플을 교대로 씀).
+    if (n >= 14) {
+      var zz = vals.slice(-14);
+      var altOk = true;
+      var prevSign = 0;
+      for (var zi = 1; zi < zz.length; zi++) {
+        var dz = zz[zi] - zz[zi - 1];
+        var sign = dz > TREND_EPS ? 1 : dz < -TREND_EPS ? -1 : 0;
+        if (sign === 0) { altOk = false; break; }
+        if (zi > 1 && sign === prevSign) { altOk = false; break; }
+        prevSign = sign;
+      }
+      if (altOk) {
+        findings.push({
+          key: "zigzag",
+          title: "지그재그(교대 반복) 패턴 · 최근 14회 연속",
+          plain: "최근 14번의 값이 오름·내림을 한 번도 거르지 않고 정확히 번갈아 반복하고 있습니다. " +
+            "이렇게 규칙적으로 오르내리는 건 우연이라기엔 너무 정교한 패턴이라, 보통 서로 다른 두 조건이 " +
+            "번갈아 섞여 들어가고 있다는 뜻입니다(예: 두 사람이 교대로 측정, 서로 다른 지그·샘플을 번갈아 사용).",
+          detail: points[n - 14].date + " " + points[n - 14].shift + " ~ " + points[n - 1].date + " " +
+            points[n - 1].shift + " 동안 14회 연속으로 직전 값 대비 상승·하강이 번갈아 나타났음"
+        });
+      }
+    }
+
+    // [6] 이상 저변동(비정상적으로 조용함) — 최근 15회가 전부 전체 평균 ±1표준편차
+    // 안에만 있음(Nelson Rule 7). SPC에서는 "너무 좋아 보이는" 안정성도 확인
+    // 대상이다 — 대개는 좋은 일이지만, 종종 값을 실제로 다시 재지 않고 이전
+    // 값을 그대로 베껴 쓰거나, 디텍터 감도가 떨어져 변화를 못 잡아내는 경우에도
+    // 이런 모양이 나온다.
+    if (n >= 15) {
+      var sdAll = stdev(vals, m);
+      if (sdAll > TREND_EPS) {
+        var last15 = vals.slice(-15);
+        var allInsideBand = last15.every(function (v) { return Math.abs(v - m) <= sdAll + TREND_EPS; });
+        if (allInsideBand) {
+          findings.push({
+            key: "lowVariation",
+            title: "이상 저변동 · 최근 15회 모두 평소 흔들림의 1표준편차 이내",
+            plain: "나쁜 신호는 아닐 수 있지만, 최근 15번이 전부 평소보다 훨씬 좁은 범위 안에서만 움직이고 " +
+              "있습니다. 실제로 공정이 안정된 것일 수도 있지만, 드물게는 측정을 다시 하지 않고 이전 값을 " +
+              "그대로 옮겨 적었거나 디텍터 감도가 떨어져 변화를 못 잡아내는 경우에도 이런 모양이 나옵니다.",
+            detail: "전체 평균(" + fmt(Math.round(m * 1000) / 1000) + " " + UNIT + ") ± 표준편차(" +
+              fmt(Math.round(sdAll * 1000) / 1000) + " " + UNIT + ") 범위 안에 최근 15회가 전부 들어왔음"
+          });
+        }
+      }
+    }
+
+    // [7] 이봉 분포(혼합) — 최근 8회가 전부 전체 평균에서 1표준편차보다 멀리
+    // 떨어져 있고, 그 중간(1표준편차 이내)에는 하나도 없음(Nelson Rule 8).
+    // 값이 평균 근처가 아니라 위·아래 양쪽으로만 몰려 있다는 뜻으로, 서로 다른
+    // 두 모집단(예: 두 마스터 샘플, 두 지그)의 값이 한 항목에 섞여 있을 때
+    // 나타나는 전형적인 모양이다.
+    if (n >= 8) {
+      var sdAll2 = stdev(vals, m);
+      if (sdAll2 > TREND_EPS) {
+        var last8 = vals.slice(-8);
+        var allOutside = last8.every(function (v) { return Math.abs(v - m) > sdAll2 + TREND_EPS; });
+        if (allOutside) {
+          var above = last8.filter(function (v) { return v > m; }).length;
+          findings.push({
+            key: "mixture",
+            title: "이봉 분포(혼합 의심) · 최근 8회가 평균 근처 없이 위아래로만 분포",
+            plain: "최근 8번의 값이 평균 근처에는 하나도 없이, 평균보다 눈에 띄게 높거나(" + above +
+              "회) 낮은(" + (8 - above) + "회) 값으로만 나뉘어 나타났습니다. 하나의 안정된 공정에서는 " +
+              "보통 평균 근처 값이 가장 많이 나오므로, 이런 모양은 서로 다른 두 조건의 값이 한 항목에 " +
+              "섞여 기록되고 있을 가능성을 의심해 볼 만합니다.",
+            detail: "전체 평균(" + fmt(Math.round(m * 1000) / 1000) + " " + UNIT + ") ± 표준편차(" +
+              fmt(Math.round(sdAll2 * 1000) / 1000) + " " + UNIT + ") 이내 값이 최근 8회 중 0회였음(평균 위 " +
+              above + "회, 평균 아래 " + (8 - above) + "회)"
+          });
+        }
+      }
+    }
+
     return findings;
   }
 
-  function renderTrendNote(points) {
+  /* =========================================================================
+     스펙 이탈 예상 시점 — 지금의 추세(회귀 기울기)가 그대로 이어진다면 며칠
+     후 상한 또는 하한에 닿을지 계산한다. SPC 규칙([1]~[7])은 "지금 이상한가"를
+     보는 것이고, 이건 "이대로 가면 언제 문제가 되는가"를 보는 것이라 역할이
+     다르다 — 그래서 findings와 별개로 계산해 따로 보여준다.
+     추세가 뚜렷하지 않으면(R² 낮음) 억지로 보여주지 않는다 — 잡음을 추세로
+     착각해 근거 없는 날짜를 내미는 것이 "정밀한 척하는 헛소리"보다 못하다.
+     직선 연장일 뿐 미래를 보장하지 않는다는 점은 문구에 항상 명시한다.
+     ========================================================================= */
+  function projectSpecBreach(points, sample) {
+    if (!sample) return null;
+    var lsl = sample.lsl, usl = sample.usl;
+    if (typeof lsl !== "number" || typeof usl !== "number") return null;
+
+    var n = points.length;
+    if (n < 8) return null;
+
+    var winN = Math.min(15, n);
+    var win = points.slice(-winN);
+    var vals = win.map(function (p) { return p.v; });
+    var reg = linreg(vals);
+    if (reg.r2 < 0.3 || Math.abs(reg.slope) <= TREND_EPS) return null; // 추세가 뚜렷하지 않으면 계산하지 않는다
+
+    var predicted = reg.intercept + reg.slope * (winN - 1);
+    var target, limitName;
+    if (reg.slope > 0) { target = usl; limitName = "상한"; }
+    else { target = lsl; limitName = "하한"; }
+
+    var steps = (target - predicted) / reg.slope;
+    if (!isFinite(steps) || steps <= 0) return null;   // 이미 그 방향을 지나쳤거나 반대로 향함
+    if (steps > 60) return null;                        // 너무 먼 미래는 예측 의미가 없어 표시하지 않음
+
+    var first = win[0].date, last = win[winN - 1].date;
+    var spanDays = (dateFromStr(last) - dateFromStr(first)) / 86400000;
+    var avgInterval = winN > 1 && spanDays > 0 ? spanDays / (winN - 1) : 1;
+    var daysToBreach = Math.max(1, Math.round(steps * avgInterval));
+    var projectedDate = addDays(last, daysToBreach);
+
+    var perStep = reg.slope >= 0 ? "+" + fmt(Math.round(reg.slope * 1000) / 1000) : fmt(Math.round(reg.slope * 1000) / 1000);
+    return {
+      limitName: limitName,
+      targetText: fmt(Math.round(target * 1000) / 1000),
+      days: daysToBreach,
+      date: projectedDate,
+      plain: "최근 " + winN + "회의 추세(측정 1회당 " + perStep + " " + UNIT + ", R² " +
+        fmt(Math.round(reg.r2 * 1000) / 1000) + ")가 그대로 이어진다면, 약 " + daysToBreach + "일 후(" +
+        projectedDate + " 무렵) " + limitName + "(" + fmt(Math.round(target * 1000) / 1000) + " " + UNIT +
+        ")에 도달할 것으로 추정됩니다.",
+      detail: "이 추정은 최근 " + winN + "회 구간의 직선 추세를 그대로 연장한 것으로, 실제로 이 속도가 " +
+        "유지된다는 보장은 없습니다. 추세가 느려지거나 방향이 바뀌면 예상일도 함께 바뀝니다 — 참고용으로만 활용하세요."
+    };
+  }
+
+  function renderTrendNote(points, sample) {
     var findings = detectTrend(points);
-    if (!findings.length) return "";
+    var forecast = projectSpecBreach(points, sample);
+    if (!findings.length && !forecast) return "";
     var items = findings.map(function (f) {
       var causes = CAUSE_HINTS[f.key] || [];
       return '<div class="trend-item">' +
@@ -1549,9 +1699,17 @@
           : "") +
         "</div>";
     }).join("");
+    var forecastHtml = forecast
+      ? '<div class="trend-item">' +
+        '<div class="trend-title">📉 추세 지속 시 ' + esc(forecast.limitName) + ' 도달 예상</div>' +
+        '<div class="trend-plain">' + esc(forecast.plain) + '</div>' +
+        '<div class="trend-detail">' + esc(forecast.detail) + '</div>' +
+        "</div>"
+      : "";
+    var headCount = findings.length + (forecast ? 1 : 0);
     return '<div class="trend-note">' +
-      '<div class="trend-head">⚠ 추이 이상 신호 ' + findings.length + '건</div>' +
-      items +
+      '<div class="trend-head">⚠ 추이 이상 신호 ' + headCount + '건</div>' +
+      items + forecastHtml +
       '<p class="trend-foot">스펙(상·하한) 이탈과는 별개로, 이 샘플의 평소 패턴과 통계적으로 다른 움직임을 자동으로 잡아낸 것입니다(통계 계산 — AI 판단이 아닙니다). 실제 원인은 현장에서 확인하세요 — 위 원인 목록은 일반적으로 흔한 사례이며, 이 설비 특성에 맞게 다듬어 쓰는 것을 권장합니다. 이 분석은 지금 보이는 주간·월간 기간과 무관하게 <b>이 샘플의 전체 기록</b>을 기준으로 계산합니다 — 위 날짜가 지금 그래프 기간 밖일 수 있습니다.</p>' +
       "</div>";
   }
@@ -1616,7 +1774,7 @@
         // 기록으로 계산한다 — SPC 규칙 대부분이 최소 6~10개 데이터를 요구하는데,
         // 주간 보기는 최대 7일치뿐이라 그 안에서만 보면 거의 항상 "신호 없음"으로
         // 나와 사실상 무용지물이었다(개선이력.md 참고).
-        renderTrendNote(sampleHistory(s)) +
+        renderTrendNote(sampleHistory(s), s) +
         '<div class="ch-legend">' +
           '<span><i style="background:#2f6e6c;"></i>누설값</span>' +
           '<span><i style="background:#a8752f;"></i>추세선(회귀분석)</span>' +
@@ -1967,7 +2125,7 @@
       '</div>' +
       '<div class="chart-card">' + chart.svg +
         regressionStatsHtml(chart.reg) +
-        renderTrendNote(pts) +
+        renderTrendNote(pts, s) +
         '<div class="ch-legend"><span style="width:100%;">점을 터치하면 그때 값이 표시됩니다 · 숫자 뒤 &ldquo;야&rdquo; = 야간 교대</span></div>' +
       '</div>' +
       '<div class="table-scroll" style="max-height:280px;overflow:auto;">' +
@@ -2773,7 +2931,8 @@
       body = '<div class="help-live-body">아직 "' + esc(s.name) + '"으로 기록된 값이 없습니다.</div>';
     } else {
       var findings = detectTrend(points);
-      if (!findings.length) {
+      var forecast = projectSpecBreach(points, s);
+      if (!findings.length && !forecast) {
         body = '<div class="help-live-body">전체 ' + points.length + '회 기록을 확인한 결과, 지금은 특별한 이상 신호가 없습니다. 안정적인 상태입니다.</div>';
       } else {
         body = findings.map(function (f) {
@@ -2788,6 +2947,13 @@
               : "") +
             "</div>";
         }).join("");
+        if (forecast) {
+          body += '<div class="help-live-finding">' +
+            '<div class="trend-title">📉 추세 지속 시 ' + esc(forecast.limitName) + ' 도달 예상</div>' +
+            '<div class="trend-plain">' + esc(forecast.plain) + '</div>' +
+            '<div class="trend-detail">' + esc(forecast.detail) + '</div>' +
+            "</div>";
+        }
       }
       body += '<button type="button" class="goto" data-live-goto="' + esc(s.id) + '">전체 이력 보기로 이동</button>';
     }
