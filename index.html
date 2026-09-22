@@ -260,8 +260,15 @@
   table.hist td.v{font-weight:700;font-variant-numeric:tabular-nums;}
   table.hist td.v.ng{color:#8f3226;}
 
+  /* 화면 하단에 뒀었으나(2026-09-22 발견), 필수 입력 누락 토스트처럼 숫자 입력칸에
+     focus()를 거는 경우와 함께 뜨면 모바일 On-Screen 키보드가 화면 아래쪽을
+     그만큼 가려서 "간헐적으로만 보인다"는 문제가 있었다 — 어떤 필드가 비었는지에
+     따라(날짜칸은 키보드가 안 뜨고, 숫자칸은 키보드가 뜸) 보이는 경우와 안 보이는
+     경우가 갈렸다. 키보드는 항상 화면 "아래"만 가리므로, 토스트를 위쪽으로 옮겨
+     키보드 유무와 무관하게 항상 보이게 했다.
+  */
   .toast{
-    position:fixed;left:50%;bottom:26px;transform:translateX(-50%);
+    position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translateX(-50%);
     background:var(--navy);color:#fff;font-size:13px;font-weight:700;
     padding:11px 18px;border-radius:999px;z-index:9000;
     box-shadow:0 6px 18px rgba(10,37,64,.28);
