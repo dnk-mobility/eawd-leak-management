@@ -97,6 +97,70 @@
   }
 
   footer{max-width:640px;margin:0 auto;padding:12px 16px 32px;text-align:center;color:var(--gray-500);font-size:11px;line-height:1.6;}
+
+  /* 도움말 위젯 — index.html과 동일(§4-6 참고). 이 파일은 채널 하나로 좁혀진
+     화면이 아니라 6개 채널 요약이라, "OK 마스터 트렌드 분석해줘" 같은 실시간
+     분석 기능(matchLiveAnalysis)은 특정 채널 문맥이 없어 옮기지 않았다 —
+     FAQ 검색만 그대로 제공한다. */
+  #helpWrap{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:300;}
+  #helpFab{
+    width:52px;height:52px;border-radius:50%;border:none;background:var(--navy);color:#fff;
+    font-size:22px;font-weight:800;cursor:pointer;box-shadow:0 4px 14px rgba(27,74,73,.35);
+    display:flex;align-items:center;justify-content:center;
+  }
+  #helpFab:active{opacity:.85;}
+  #helpFabIcon{display:inline-block;animation:helpPulse 1.7s ease-in-out infinite;}
+  #helpFab[aria-expanded="true"] #helpFabIcon{animation:none;opacity:1;filter:none;}
+  @keyframes helpPulse{
+    0%,100%{opacity:1;filter:drop-shadow(0 0 0 rgba(168,117,47,0));}
+    50%{opacity:.5;filter:drop-shadow(0 0 6px rgba(168,117,47,.9));}
+  }
+  @media (prefers-reduced-motion:reduce){ #helpFabIcon{animation:none;} }
+  #helpPanel{
+    position:absolute;right:0;bottom:62px;width:min(340px,calc(100vw - 32px));
+    max-height:min(70vh,520px);background:var(--white);border-radius:12px;
+    box-shadow:0 8px 28px rgba(43,38,33,.22);border:1px solid var(--gray-300);
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+  #helpPanel[hidden]{display:none;}
+  #helpPanel.kb-avoid{
+    position:fixed;top:calc(12px + env(safe-area-inset-top,0px));right:16px;bottom:auto;
+    width:min(340px,calc(100vw - 32px));
+  }
+  .help-head{
+    display:flex;align-items:center;gap:8px;padding:12px 14px;background:var(--navy);color:#fff;
+    font-size:13px;font-weight:800;
+  }
+  .help-head span{flex:1;}
+  .help-head button{
+    border:none;background:rgba(255,255,255,.16);color:#fff;width:26px;height:26px;
+    border-radius:6px;font-size:13px;line-height:1;cursor:pointer;flex-shrink:0;
+  }
+  .help-search-row{padding:10px 12px;border-bottom:1px solid var(--gray-200);}
+  .help-search-row input{
+    width:100%;box-sizing:border-box;font-family:inherit;font-size:14px;
+    padding:8px 10px;border:1px solid var(--gray-300);border-radius:7px;background:var(--gray-100);
+  }
+  .help-list{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px 0;}
+  .help-empty{padding:20px 14px;text-align:center;color:var(--gray-500);font-size:12.5px;}
+  .help-fuzzy-note{padding:10px 14px 4px;color:var(--gray-500);font-size:11.5px;}
+  .help-item{border-bottom:1px solid var(--gray-100);}
+  .help-q{
+    width:100%;text-align:left;border:none;background:none;cursor:pointer;
+    padding:10px 14px;font-family:inherit;font-size:12.5px;font-weight:700;color:var(--gray-900);
+    display:flex;align-items:center;gap:6px;
+  }
+  .help-q .tag{
+    flex-shrink:0;font-size:9.5px;font-weight:800;padding:2px 6px;border-radius:4px;
+    background:var(--gray-200);color:var(--gray-700);
+  }
+  .help-q .tag.admin{background:var(--warn-bg);color:var(--warn-text);}
+  .help-q .chev{margin-left:auto;color:var(--gray-400);flex-shrink:0;}
+  .help-a{padding:0 14px 12px 14px;font-size:12px;color:var(--gray-700);line-height:1.55;}
+  .goto{
+    display:inline-block;margin-top:8px;border:none;background:var(--accent);color:#fff;
+    font-family:inherit;font-size:11.5px;font-weight:700;padding:7px 12px;border-radius:6px;cursor:pointer;
+  }
 </style>
 </head>
 <body>
@@ -127,6 +191,22 @@
   DnK MOBILITY · 후공정 생산기술팀<br>
   본 페이지는 사내 품질관리 목적으로 관리됩니다
 </footer>
+
+<div id="helpWrap">
+  <button type="button" id="helpFab" aria-label="도움말 열기" aria-expanded="false">
+    <span id="helpFabIcon">?</span>
+  </button>
+  <div id="helpPanel" hidden>
+    <div class="help-head">
+      <span>무엇을 도와드릴까요?</span>
+      <button type="button" id="helpClose" aria-label="닫기">✕</button>
+    </div>
+    <div class="help-search-row">
+      <input type="search" id="helpSearch" placeholder="궁금한 내용을 검색해보세요" autocomplete="off">
+    </div>
+    <div id="helpList" class="help-list"></div>
+  </div>
+</div>
 
 <script>
 (function () {
@@ -338,6 +418,157 @@
     $("dMeta").textContent = "6개 채널 · " + todayStr() + " 기준";
   }
 
+  /* =========================================================================
+     도움말 위젯 — index.html §4-6과 동일한 FAQ 검색(문서 상단 주석 참고).
+     "OK 마스터 트렌드 분석해줘" 같은 실시간 분석(matchLiveAnalysis)은 특정
+     채널 문맥이 있어야 하는데 이 화면은 6개 채널 요약이라 옮기지 않았다 —
+     그래서 FAQ의 goto 이동 버튼도 렌더링하지 않는다(index.html의 섹션 id가
+     이 페이지엔 없어 눌러도 아무 반응 없는 죽은 버튼이 되는 것을 피하기 위함).
+     새 질문을 추가하려면 index.html의 FAQ 배열과 여기 둘 다 고쳐야 한다.
+     ========================================================================= */
+  var FAQ = [
+    { q: "누설값은 어떻게 입력하나요?", keywords: "입력 저장 측정값 기록 시업전 점검",
+      a: "카드를 눌러 해당 채널 화면으로 이동한 뒤, ①시업 전 점검 입력에서 일자·교대·확인자를 채우고 마스터 샘플별 누설값을 입력하고 [저장]을 누르세요." },
+    { q: "NG로 뜨면 어떻게 하나요?", keywords: "NG 불량 판정 스펙 이탈",
+      a: "입력한 값이 스펙(상한·하한)을 벗어났다는 뜻입니다. 먼저 값을 잘못 입력하지 않았는지 확인하고, 맞다면 재측정해 보세요. 계속 NG가 나오면 관리자에게 알려주세요." },
+    { q: "마스터 NG가 반복해서 뜨면 어떻게 하나요?", keywords: "마스터 NG 반복 자주 원인 디텍터 매뉴얼 LS-R700",
+      a: "한두 번이면 재측정으로 확인하면 되지만, 계속 반복되면 디텍터(LS-R700) 매뉴얼의 확인 순서를 따라가 보세요. ① 스톱밸브를 닫은 상태에서 No-Leak Test — 디텍터 자체 문제인지 먼저 구분 ② Work(작업물) 쪽 압력 상승 — 씰 마모·오염, Work 내부 공기의 온도 변화 ③ Master(마스터 샘플) 쪽 압력 하강 — 마스터나 배관 조인트의 누설, 배관재 변형, 온도 안정이 나쁜 마스터 ④ 위 방법으로도 해결 안 되면 과잉보정 의심 — 보정값(Comp Value) 갱신이 필요할 수 있습니다. 실제 조치는 설비 보수 담당자에게 문의하세요." },
+    { q: "이 화면(전체 현황)은 뭔가요?", keywords: "대시보드 전체현황 요약 카드 화면",
+      a: "6개 채널을 QR로 하나씩 찍지 않고 한 화면에서 오늘 상태(정상/NG/미점검)를 요약해서 보여줍니다. 카드를 누르면 그 채널의 상세 입력·그래프 화면으로 이동합니다." },
+    { q: "⚠ 추이 이상 배지는 뭔가요?", keywords: "추이 이상 배지 경고 노란상자",
+      a: "그 채널의 대표 샘플이 평소 패턴과 통계적으로 다르게 움직이고 있다는 뜻입니다. 스펙 안이어도 표시될 수 있고, 아직 불량은 아니어도 미리 확인해 보라는 신호입니다. 카드를 눌러 들어가면 자세한 원인 힌트를 볼 수 있습니다." },
+    { q: "카드에 그래프가 안 보여요", keywords: "그래프 없음 빈 카드 데이터 부족",
+      a: "그 채널의 대표 샘플(첫 번째로 등록된 샘플)로 이번 달 기록이 부족하면 그래프 대신 안내 문구가 뜹니다. 카드를 눌러 들어가면 다른 샘플의 기록은 있는지 확인할 수 있습니다." },
+    { q: "일부 채널을 불러오지 못했다고 나와요", keywords: "연동 오류 일부 채널 불러오기 실패",
+      a: "구글시트 연동이 일시적으로 응답하지 않은 것입니다. 그 채널은 이 폰에 저장된 이전 기록으로 표시됩니다. 잠시 후 새로고침하면 대부분 해결됩니다." },
+    { q: "다른 사람이 입력한 값이 안 보여요", keywords: "동기화 연동 안됨 새로고침",
+      a: "상단 안내 문구에 연동 관련 메시지가 있는지 확인하고 페이지를 새로고침해 보세요. 구글시트 연동이 꺼져 있으면 이 폰에 저장된 채널만 보입니다." },
+    { q: "인터넷이 안 될 때도 볼 수 있나요?", keywords: "오프라인 인터넷 전파 안됨",
+      a: "네. 이 폰에 저장된 캐시로 먼저 화면을 그리고, 통신이 되면 자동으로 최신 값으로 갱신합니다." }
+  ];
+
+  function searchFaq(query) {
+    var q = query.trim().toLowerCase();
+    if (!q) return FAQ;
+    var tokens = q.split(/[\s,.!?~/·]+/).filter(function (t) { return t.length > 0; });
+    if (!tokens.length) return FAQ;
+    var scored = FAQ.map(function (f) {
+      var hay = (f.q + " " + f.keywords + " " + f.a).toLowerCase();
+      var score = 0;
+      tokens.forEach(function (t) { if (hay.indexOf(t) >= 0) score++; });
+      return { f: f, score: score };
+    }).filter(function (x) { return x.score > 0; });
+    scored.sort(function (a, b) { return b.score - a.score; });
+    return scored.map(function (x) { return x.f; });
+  }
+
+  function bigrams(s) {
+    var t = String(s || "").replace(/\s+/g, "");
+    var out = [];
+    for (var i = 0; i < t.length - 1; i++) out.push(t.slice(i, i + 2));
+    return out;
+  }
+  function bigramSimilarity(a, b) {
+    var A = bigrams(a), B = bigrams(b);
+    if (!A.length || !B.length) return 0;
+    var counts = {};
+    B.forEach(function (g) { counts[g] = (counts[g] || 0) + 1; });
+    var hits = 0;
+    A.forEach(function (g) {
+      if (counts[g] > 0) { hits++; counts[g]--; }
+    });
+    return hits / A.length;
+  }
+  function fuzzySearchFaq(query) {
+    var q = query.trim().toLowerCase();
+    if (!q) return [];
+    var scored = FAQ.map(function (f) {
+      var hay = (f.q + " " + f.keywords).toLowerCase();
+      return { f: f, score: bigramSimilarity(q, hay) };
+    }).filter(function (x) { return x.score >= 0.3; });
+    scored.sort(function (a, b) { return b.score - a.score; });
+    return scored.slice(0, 4).map(function (x) { return x.f; });
+  }
+
+  function renderHelpList(query) {
+    var list = $("helpList");
+    var results = searchFaq(query || "");
+    var isFuzzy = false;
+
+    if (!results.length && query && query.trim()) {
+      results = fuzzySearchFaq(query);
+      isFuzzy = results.length > 0;
+    }
+
+    if (!results.length) {
+      list.innerHTML = '<div class="help-empty">일치하는 답을 못 찾았습니다.<br>문의는 후공정 생산기술팀으로 부탁드립니다.</div>';
+      return;
+    }
+
+    var fuzzyNoteHtml = isFuzzy
+      ? '<div class="help-fuzzy-note">정확히 일치하는 답은 못 찾았지만, 혹시 이런 게 궁금하신가요?</div>'
+      : "";
+
+    var itemsHtml = results.map(function (f, i) {
+      return '<div class="help-item">' +
+        '<button type="button" class="help-q" data-i="' + i + '">' +
+          '<span>' + esc(f.q) + '</span>' +
+          '<span class="chev">▾</span>' +
+        '</button>' +
+        '<div class="help-a" id="helpA' + i + '" hidden>' + esc(f.a) + '</div>' +
+        '</div>';
+    }).join("");
+    list.innerHTML = fuzzyNoteHtml + itemsHtml;
+
+    results.forEach(function (f, i) {
+      var btn = list.querySelector('.help-q[data-i="' + i + '"]');
+      var ans = $("helpA" + i);
+      btn.addEventListener("click", function () {
+        var open = !ans.hidden;
+        list.querySelectorAll(".help-a").forEach(function (a) { a.hidden = true; });
+        ans.hidden = open;
+      });
+    });
+  }
+
+  function openHelp() {
+    $("helpPanel").hidden = false;
+    $("helpFab").setAttribute("aria-expanded", "true");
+    $("helpFabIcon").textContent = "✕";
+    $("helpSearch").value = "";
+    renderHelpList("");
+    setTimeout(function () { $("helpSearch").focus(); }, 50);
+  }
+
+  function closeHelp() {
+    $("helpPanel").hidden = true;
+    $("helpPanel").classList.remove("kb-avoid");
+    $("helpFab").setAttribute("aria-expanded", "false");
+    $("helpFabIcon").textContent = "?";
+  }
+
+  function initHelp() {
+    $("helpFab").addEventListener("click", function () {
+      if ($("helpPanel").hidden) openHelp(); else closeHelp();
+    });
+    $("helpClose").addEventListener("click", closeHelp);
+    $("helpSearch").addEventListener("input", function () {
+      renderHelpList($("helpSearch").value);
+    });
+
+    var isTouch = false;
+    try { isTouch = window.matchMedia("(pointer:coarse)").matches; } catch (e) {}
+    if (isTouch) {
+      $("helpSearch").addEventListener("focus", function () {
+        $("helpPanel").classList.add("kb-avoid");
+      });
+    }
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !$("helpPanel").hidden) closeHelp();
+    });
+  }
+
   function boot() {
     var db = loadLocal();
     var sync = window.dnkSync;
@@ -373,6 +604,7 @@
 
   var ready = (window.dnkGate && window.dnkGate.ready) || Promise.resolve();
   ready.then(boot);
+  ready.then(initHelp);
 })();
 </script>
 </body>
