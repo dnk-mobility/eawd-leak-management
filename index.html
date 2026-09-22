@@ -107,6 +107,60 @@
   .fld-row{display:flex;gap:8px;}
   .fld-row > .fld{flex:1;margin-bottom:10px;}
 
+  /* 점검 일자 — 자체 달력 (2026-09-22 추가). 브라우저 기본 <input type="date">
+     달력(아이폰 휠·안드로이드 팝업 등)은 앱이 그 위에 아무것도 그릴 수 없는
+     OS/브라우저 자체 화면이라, "이미 입력된 날짜를 달력에 표시해 달라"는 요청을
+     들어주려면 달력 자체를 이 페이지가 직접 그리는 방식으로 바꿔야 했다.
+     #inDate는 readonly 텍스트칸으로 바꾸고 .value는 그대로 "YYYY-MM-DD" 형식을
+     유지한다 — mondayOf()/ym 슬라이싱 등 기존 코드가 전부 이 형식을 그대로
+     기대하므로, 표시 방식만 바뀌고 값의 형식은 건드리지 않는다. */
+  .cal-wrap{position:relative;}
+  .cal-wrap input#inDate{cursor:pointer;background:var(--white);}
+  .cal-pop{
+    position:absolute;top:calc(100% + 6px);left:0;z-index:400;
+    width:272px;max-width:calc(100vw - 32px);
+    background:var(--white);border:1px solid var(--gray-300);border-radius:10px;
+    box-shadow:0 10px 28px rgba(43,38,33,.18);padding:10px;
+  }
+  .cal-pop[hidden]{display:none;}
+  .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+  .cal-head span{font-size:13px;font-weight:800;color:var(--gray-900);}
+  .cal-head button{
+    width:30px;height:30px;border:none;background:var(--gray-100);border-radius:7px;
+    font-size:15px;font-weight:800;color:var(--navy);cursor:pointer;font-family:inherit;
+  }
+  .cal-head button:disabled{color:var(--gray-300);cursor:default;}
+  .cal-head button:active{background:var(--gray-200);}
+  .cal-wd{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;margin-bottom:2px;}
+  .cal-wd span{font-size:10px;font-weight:700;color:var(--gray-500);padding:4px 0;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+  .cal-day{
+    position:relative;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;
+    font-size:12.5px;font-weight:600;color:var(--gray-900);border:none;background:none;
+    border-radius:7px;cursor:pointer;font-family:inherit;
+  }
+  .cal-day:active{background:var(--gray-100);}
+  .cal-day.today{box-shadow:inset 0 0 0 1.5px var(--navy);}
+  .cal-day.sel{background:var(--navy);color:#fff;font-weight:800;}
+  .cal-day.future{color:var(--gray-300);cursor:default;}
+  .cal-day .dot{
+    position:absolute;bottom:3px;left:50%;transform:translateX(-50%);
+    width:5px;height:5px;border-radius:50%;
+  }
+  .cal-day .dot.ok{background:#2f6e6c;}
+  .cal-day .dot.ng{background:#b8453a;}
+  .cal-day.sel .dot{background:#fff;}
+  .cal-foot{display:flex;align-items:center;gap:10px;margin-top:8px;padding-top:8px;border-top:1px solid var(--gray-100);}
+  .cal-legend{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--gray-500);}
+  .cal-legend .dot{width:6px;height:6px;border-radius:50%;display:inline-block;}
+  .cal-legend .dot.ok{background:#2f6e6c;}
+  .cal-legend .dot.ng{background:#b8453a;}
+  #calToday{
+    margin-left:auto;border:none;background:var(--gray-100);color:var(--navy);
+    font-weight:700;font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:inherit;
+  }
+  #calToday:active{background:var(--gray-200);}
+
   /* 필수 입력 표시(적색 별표) · 저장 실패 시 미입력 항목 강조 */
   .req-star{color:#b8453a;font-weight:800;margin-left:2px;}
   .field-missing{
@@ -442,7 +496,23 @@
       <div class="fld-row">
         <div class="fld">
           <label for="inDate">점검 일자<span class="req-star">*</span></label>
-          <input type="date" id="inDate">
+          <div class="cal-wrap">
+            <input type="text" id="inDate" readonly autocomplete="off" placeholder="날짜 선택">
+            <div class="cal-pop" id="calPop" hidden>
+              <div class="cal-head">
+                <button type="button" id="calPrev" aria-label="이전 달">‹</button>
+                <span id="calYm"></span>
+                <button type="button" id="calNext" aria-label="다음 달">›</button>
+              </div>
+              <div class="cal-wd"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+              <div class="cal-grid" id="calGrid"></div>
+              <div class="cal-foot">
+                <span class="cal-legend"><i class="dot ok"></i>입력됨</span>
+                <span class="cal-legend"><i class="dot ng"></i>NG 포함</span>
+                <button type="button" id="calToday">오늘</button>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="fld">
           <label for="inTemp">설비주변온도 (℃)<span class="req-star">*</span></label>
@@ -1241,6 +1311,36 @@
     if (s.usl !== null) refLine(s.usl, "#b8453a", "4 3", "상한 " + fmt(s.usl), false);
     if (s.lsl !== null) refLine(s.lsl, "#b8453a", "4 3", "하한 " + fmt(s.lsl), false);
     if (s.nominal !== null) refLine(s.nominal, "#8a8071", "2 2", "지정 " + fmt(s.nominal), true);
+
+    // 폐기(교체) 시점 세로선 (2026-09-22 추가) — "폐기하고 새 마스터로 등록하면
+    // 교체 시점을 그래프에 표시할 수 있냐"는 질문에 대한 답. X(i)는 실제 날짜
+    // 간격이 아니라 점 순서 기준이라(§4-5 추세선 주석 참고), 폐기일이 두 기록
+    // 사이의 날짜라면 그 사이 날짜 비율로 위치를 보간해야 세로선이 알맞은 자리에
+    // 온다 — 그래서 정수 인덱스 대신 소수 인덱스를 구해 X()에 그대로 넘긴다
+    // (X()는 선형식이라 소수여도 정상 동작). 이 차트에 찍힌 기간 밖의 폐기일은
+    // 표시하지 않는다(예: 지난달 그래프인데 이번 달에 폐기한 경우).
+    if (s.retired && s.retiredAt && points.length) {
+      var mIdx = null;
+      var firstD = points[0].date, lastD = points[points.length - 1].date;
+      if (s.retiredAt >= firstD && s.retiredAt <= lastD) {
+        for (var mi = 0; mi < points.length; mi++) {
+          if (points[mi].date === s.retiredAt) { mIdx = mi; break; }
+          if (points[mi].date > s.retiredAt) {
+            var d0 = points[mi - 1].date, d1 = points[mi].date;
+            var t0 = dateFromStr(d0).getTime(), t1 = dateFromStr(d1).getTime(), tr = dateFromStr(s.retiredAt).getTime();
+            mIdx = (mi - 1) + (tr - t0) / (t1 - t0);
+            break;
+          }
+        }
+      }
+      if (mIdx !== null) {
+        var mx = X(mIdx);
+        svg.push('<line x1="' + mx.toFixed(1) + '" y1="' + PT + '" x2="' + mx.toFixed(1) + '" y2="' + (H - PB) +
+          '" stroke="#7d5b8f" stroke-width="1.3" stroke-dasharray="3 2"/>');
+        svg.push('<text x="' + mx.toFixed(1) + '" y="' + (PT - 3) +
+          '" font-size="7" fill="#7d5b8f" text-anchor="middle">폐기 ' + esc(s.retiredAt) + '</text>');
+      }
+    }
 
     // 축
     svg.push('<line x1="' + PL + '" y1="' + PT + '" x2="' + PL + '" y2="' + (H - PB) + '" stroke="#d8cfbd"/>');
@@ -3267,6 +3367,94 @@
   }
 
   /* =========================================================================
+     점검 일자 — 자체 달력 (2026-09-22 추가, §개요 문서 참고)
+     ========================================================================= */
+  var calViewYm = ""; // 팝업에 지금 보이는 달 "YYYY-MM" — 실제 선택값(inDate.value)과 별개
+
+  function calDaysInMonth(y, m) { return new Date(y, m, 0).getDate(); } // m: 1-indexed
+
+  // 이 채널의 기록에서 "그 달에 값이 입력된 날짜"를 뽑아 ok/ng로 표시한다.
+  // 하루에 주간·야간 두 번 기록될 수 있는데, 그중 하나라도 NG면 그 날은 ng로 표시
+  // (판정이 갈릴 때 "괜찮은 쪽"만 보여주면 이상 신호를 놓치기 쉬우므로).
+  function calRecMarks(ymStr) {
+    var marks = {};
+    cur().recs.forEach(function (r) {
+      if (r.date.slice(0, 7) !== ymStr) return;
+      var anyNg = r.items.some(function (it) { return it.judge === "NG"; });
+      if (anyNg || !marks[r.date]) marks[r.date] = anyNg ? "ng" : (marks[r.date] || "ok");
+    });
+    return marks;
+  }
+
+  function renderCalGrid() {
+    var y = parseInt(calViewYm.slice(0, 4), 10), m = parseInt(calViewYm.slice(5, 7), 10);
+    $("calYm").textContent = y + "년 " + m + "월";
+    var firstDow = new Date(y, m - 1, 1).getDay();
+    var totalDays = calDaysInMonth(y, m);
+    var marks = calRecMarks(calViewYm);
+    var selVal = $("inDate").value;
+    var today = todayStr();
+    var cells = [];
+    for (var i = 0; i < firstDow; i++) cells.push("<div></div>");
+    for (var d = 1; d <= totalDays; d++) {
+      var ds = calViewYm + "-" + pad2(d);
+      var cls = ["cal-day"];
+      if (ds === today) cls.push("today");
+      if (ds === selVal) cls.push("sel");
+      var isFuture = ds > today;
+      if (isFuture) cls.push("future");
+      var dot = marks[ds] ? '<span class="dot ' + marks[ds] + '"></span>' : "";
+      cells.push('<button type="button" class="' + cls.join(" ") + '" data-date="' + ds + '"' +
+        (isFuture ? " disabled" : "") + ">" + d + dot + "</button>");
+    }
+    $("calGrid").innerHTML = cells.join("");
+    // 점검 일자는 미래를 기록할 수 없으므로(§3-3 트렌드 그래프와 같은 원칙), 이번
+    // 달을 보고 있으면 다음 달로 못 넘어가게 막는다 — 날짜 칸도 같은 이유로 미래는
+    // disabled 처리(위 isFuture)한다.
+    $("calNext").disabled = calViewYm >= todayStr().slice(0, 7);
+  }
+
+  function openCal() {
+    calViewYm = ($("inDate").value || todayStr()).slice(0, 7);
+    renderCalGrid();
+    $("calPop").hidden = false;
+  }
+  function closeCal() { $("calPop").hidden = true; }
+
+  function shiftCalMonth(delta) {
+    var y = parseInt(calViewYm.slice(0, 4), 10), m = parseInt(calViewYm.slice(5, 7), 10);
+    m += delta;
+    if (m < 1) { m = 12; y--; } else if (m > 12) { m = 1; y++; }
+    calViewYm = y + "-" + pad2(m);
+    renderCalGrid();
+  }
+
+  function initCal() {
+    // focus든 click이든 그냥 열기만 한다(토글 아님) — 토글로 하면 focus가 먼저
+    // 열고 뒤이은 click이 곧바로 닫아버리는 순서 문제가 생긴다(구현 중 자체 발견).
+    $("inDate").addEventListener("focus", openCal);
+    $("inDate").addEventListener("click", openCal);
+    $("calPrev").addEventListener("click", function () { shiftCalMonth(-1); });
+    $("calNext").addEventListener("click", function () { if (!$("calNext").disabled) shiftCalMonth(1); });
+    $("calToday").addEventListener("click", function () { calViewYm = todayStr().slice(0, 7); renderCalGrid(); });
+    $("calGrid").addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-date]");
+      if (!b || b.disabled) return;
+      $("inDate").value = b.getAttribute("data-date");
+      $("inDate").dispatchEvent(new Event("change", { bubbles: true }));
+      closeCal();
+    });
+    document.addEventListener("click", function (e) {
+      if ($("calPop").hidden) return;
+      if (e.target === $("inDate") || $("calPop").contains(e.target)) return;
+      closeCal();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !$("calPop").hidden) closeCal();
+    });
+  }
+
+  /* =========================================================================
      렌더 · 초기화
      ========================================================================= */
   function renderAll() {
@@ -3314,6 +3502,7 @@
       }
       fillFormFromRecord();
     });
+    initCal();
 
     $("shiftSeg").addEventListener("click", function (e) {
       var b = e.target.closest("button[data-shift]");

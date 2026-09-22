@@ -340,18 +340,33 @@
     }
     var anomaly = hasAnomaly(pts);
 
-    return { todayStatus: todayStatus, ngCount: ngCount, recordCount: monthRecs.length, pts: pts, anomaly: anomaly, sampleName: s0 ? s0.name : "" };
+    return {
+      todayStatus: todayStatus, ngCount: ngCount, recordCount: monthRecs.length, pts: pts,
+      anomaly: anomaly, sampleName: s0 ? s0.name : "",
+      spec: s0 ? { lsl: s0.lsl, usl: s0.usl } : null
+    };
   }
 
-  function sparkSvg(pts, status) {
+  // 2026-09-22: 선이 굵어 보이고 축·스펙선이 없다는 지적을 받아 두 가지를 고쳤다.
+  // ① 굵기 — viewBox(100x34)를 카드 실제 픽셀 크기(폭 300px대, 높이 46px)로 늘리며
+  //   preserveAspectRatio="none"가 가로·세로를 서로 다른 비율로 늘린다. stroke-width는
+  //   그 늘어난 좌표계 기준이라 가로 변화가 급한 구간에서 획이 특히 두꺼워 보였다.
+  //   vector-effect="non-scaling-stroke"로 이 왜곡을 없애 화면 픽셀 기준 두께로 고정한다.
+  // ② X·Y축 + 스펙선 — 왼쪽에 짧은 Y축, 아래에 X축을 긋고, 상/하한(usl/lsl)이
+  //   등록돼 있으면 빨간 점선으로 표시한다. 카드가 작아 숫자 라벨까지는 안 넣는다
+  //   (상세 화면 ②그래프에 가면 라벨 있는 전체 버전을 볼 수 있다).
+  function sparkSvg(pts, status, spec) {
     if (pts.length < 2) return null;
-    var W = 100, H = 34, base = 32;
+    spec = spec || {};
+    var W = 100, H = 34, PL = 3, PR = 1, top = 2, base = 30;
     var lo = Math.min.apply(null, pts), hi = Math.max.apply(null, pts);
+    if (typeof spec.lsl === "number") { lo = Math.min(lo, spec.lsl); hi = Math.max(hi, spec.lsl); }
+    if (typeof spec.usl === "number") { lo = Math.min(lo, spec.usl); hi = Math.max(hi, spec.usl); }
     var span = hi - lo;
     if (span === 0) { span = Math.max(Math.abs(hi) * 0.2, 1); }
     lo -= span * 0.15; hi += span * 0.15;
-    function X(i) { return pts.length === 1 ? W / 2 : (W * i) / (pts.length - 1); }
-    function Y(v) { return 2 + (base - 2) * (1 - (v - lo) / (hi - lo)); }
+    function X(i) { return pts.length === 1 ? (PL + (W - PL - PR) / 2) : PL + (W - PL - PR) * (i / (pts.length - 1)); }
+    function Y(v) { return top + (base - top) * (1 - (v - lo) / (hi - lo)); }
     var color = status === "ng" ? "#b8453a" : status === "wait" ? "#b3a896" : "#2f6e6c";
     // polyline points="x,y x,y .." 형식과 path d="M.. L.." 형식은 문법이 다르다
     // (구현 중 자체 발견 — 처음엔 둘을 한 변수로 같이 쓰려다 <polyline>에 속성이
@@ -364,16 +379,29 @@
       var x = X(i).toFixed(1);
       return '<line x1="' + x + '" y1="' + base + '" x2="' + x + '" y2="' + (base + 2) + '" stroke="#c9bea6" stroke-width="0.6"/>';
     }).join("");
+    var specLines = "";
+    if (typeof spec.usl === "number") {
+      var yU = Y(spec.usl).toFixed(1);
+      specLines += '<line x1="' + PL + '" y1="' + yU + '" x2="' + (W - PR) + '" y2="' + yU +
+        '" stroke="#b8453a" stroke-width="0.6" stroke-dasharray="2.5 2" vector-effect="non-scaling-stroke"/>';
+    }
+    if (typeof spec.lsl === "number") {
+      var yL = Y(spec.lsl).toFixed(1);
+      specLines += '<line x1="' + PL + '" y1="' + yL + '" x2="' + (W - PR) + '" y2="' + yL +
+        '" stroke="#b8453a" stroke-width="0.6" stroke-dasharray="2.5 2" vector-effect="non-scaling-stroke"/>';
+    }
     var last = pts.length - 1;
     return '<svg class="d-spark" viewBox="0 0 100 34" preserveAspectRatio="none">' +
       '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1">' +
       '<stop offset="0%" stop-color="' + color + '" stop-opacity=".2"/>' +
       '<stop offset="100%" stop-color="' + color + '" stop-opacity="0"/></linearGradient></defs>' +
-      '<line x1="0" y1="' + base + '" x2="100" y2="' + base + '" stroke="#e6dfd0" stroke-width="0.8"/>' +
+      '<line x1="' + PL + '" y1="' + top + '" x2="' + PL + '" y2="' + base + '" stroke="#a89b82" stroke-width="0.6" vector-effect="non-scaling-stroke"/>' +
+      '<line x1="' + PL + '" y1="' + base + '" x2="' + (W - PR) + '" y2="' + base + '" stroke="#a89b82" stroke-width="0.6" vector-effect="non-scaling-stroke"/>' +
+      specLines +
       ticks +
       '<path d="' + areaD + '" fill="url(#' + gid + ')"/>' +
-      '<polyline points="' + pointsAttr + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
-      '<circle cx="' + X(last).toFixed(1) + '" cy="' + Y(pts[last]).toFixed(1) + '" r="2.6" fill="' + color + '" stroke="#fff" stroke-width=".8"/>' +
+      '<polyline points="' + pointsAttr + '" fill="none" stroke="' + color + '" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>' +
+      '<circle cx="' + X(last).toFixed(1) + '" cy="' + Y(pts[last]).toFixed(1) + '" r="2.4" fill="' + color + '" stroke="#fff" stroke-width=".8" vector-effect="non-scaling-stroke"/>' +
       "</svg>";
   }
 
@@ -383,7 +411,7 @@
     var badgeHtml = st.todayStatus === "ng"
       ? '<span class="d-badge ng"><span class="txt">NG</span></span>'
       : '<span class="d-badge ' + st.todayStatus + '">' + badgeTxt + '</span>';
-    var spark = sparkSvg(st.pts, st.todayStatus);
+    var spark = sparkSvg(st.pts, st.todayStatus, st.spec);
     var flag = st.anomaly ? '<span class="d-flag">⚠ 추이 이상</span>' : "";
     var footText = st.todayStatus === "wait"
       ? "이번 달 NG " + st.ngCount + "건 · 오늘 아직 입력 없음"
