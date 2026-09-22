@@ -813,7 +813,8 @@
         out.push({
           label: parseInt(r.date.slice(5, 7), 10) + "/" + parseInt(r.date.slice(8, 10), 10) +
                  (r.shift === "야간" ? "야" : ""),
-          v: it.v, judge: it.judge, date: r.date, shift: r.shift, by: r.by || ""
+          v: it.v, judge: it.judge, date: r.date, shift: r.shift, by: r.by || "",
+          temp: r.temp === null || r.temp === undefined ? null : r.temp
         });
       });
     });
@@ -1445,6 +1446,7 @@
         var s = n - run;
         findings.push({
           key: "trend",
+          win: run,
           title: (dir > 0 ? "연속 상승 추세" : "연속 하강 추세") + " · " + run + "회 연속 진행 중",
           plain: "측정할 때마다 누설값이 " + run + "번 연속으로 " + (dir > 0 ? "조금씩 계속 커지고" : "조금씩 계속 작아지고") +
             " 있습니다. 오르내림 없이 " + (dir > 0 ? "한쪽으로만 계속 올라가는" : "한쪽으로만 계속 내려가는") +
@@ -1468,6 +1470,7 @@
         var s = n - run;
         findings.push({
           key: "shift",
+          win: run,
           title: "평균 한쪽 쏠림 · " + run + "회 연속 " + (side > 0 ? "평균보다 높음" : "평균보다 낮음"),
           plain: "최근 " + run + "번은 잴 때마다 거의 매번 평소보다 " + (side > 0 ? "높게" : "낮게") + " 나오고 있습니다. " +
             "하루 이틀이면 그냥 그런 날일 수 있지만, 이렇게 오래 한쪽으로만 쏠리는 건 며칠 사이에 뭔가가 " +
@@ -1500,6 +1503,7 @@
         if (hi.length >= 2) {
           findings.push({
             key: "nearLimit",
+            win: 3,
             title: "경고 구간 근접 · 평소보다 크게 높음",
             plain: "스펙(상한·하한) 판정으로는 아직 문제없는 값들입니다. 다만 최근 3번 중 " + hi.length +
               "번이, 이 샘플이 평소 흔들리던 폭을 벗어날 만큼 눈에 띄게 높게 나왔습니다. " +
@@ -1512,6 +1516,7 @@
         if (lo.length >= 2) {
           findings.push({
             key: "nearLimit",
+            win: 3,
             title: "경고 구간 근접 · 평소보다 크게 낮음",
             plain: "스펙(상한·하한) 판정으로는 아직 문제없는 값들입니다. 다만 최근 3번 중 " + lo.length +
               "번이, 이 샘플이 평소 흔들리던 폭을 벗어날 만큼 눈에 띄게 낮게 나왔습니다. " +
@@ -1536,6 +1541,7 @@
         var ratioText = rawRatio >= 5 ? "5배 이상으로" : "약 " + fmt(Math.round(rawRatio * 10) / 10) + "배로";
         findings.push({
           key: "volatility",
+          win: 5,
           title: "최근 변동폭 급증",
           plain: "최근 5번의 측정값이 예전보다 훨씬 들쭉날쭉합니다(같은 사람·같은 방법으로 재도 오르락내리락하는 " +
             "폭이 이전보다 " + ratioText + " 커졌습니다). 어느 한 방향으로 나빠지는 게 아니라 " +
@@ -1566,6 +1572,7 @@
       if (altOk) {
         findings.push({
           key: "zigzag",
+          win: 14,
           title: "지그재그(교대 반복) 패턴 · 최근 14회 연속",
           plain: "최근 14번의 값이 오름·내림을 한 번도 거르지 않고 정확히 번갈아 반복하고 있습니다. " +
             "이렇게 규칙적으로 오르내리는 건 우연이라기엔 너무 정교한 패턴이라, 보통 서로 다른 두 조건이 " +
@@ -1589,6 +1596,7 @@
         if (allInsideBand) {
           findings.push({
             key: "lowVariation",
+            win: 15,
             title: "이상 저변동 · 최근 15회 모두 평소 흔들림의 1표준편차 이내",
             plain: "나쁜 신호는 아닐 수 있지만, 최근 15번이 전부 평소보다 훨씬 좁은 범위 안에서만 움직이고 " +
               "있습니다. 실제로 공정이 안정된 것일 수도 있지만, 드물게는 측정을 다시 하지 않고 이전 값을 " +
@@ -1614,6 +1622,7 @@
           var above = last8.filter(function (v) { return v > m; }).length;
           findings.push({
             key: "mixture",
+            win: 8,
             title: "이봉 분포(혼합 의심) · 최근 8회가 평균 근처 없이 위아래로만 분포",
             plain: "최근 8번의 값이 평균 근처에는 하나도 없이, 평균보다 눈에 띄게 높거나(" + above +
               "회) 낮은(" + (8 - above) + "회) 값으로만 나뉘어 나타났습니다. 하나의 안정된 공정에서는 " +
@@ -1683,9 +1692,82 @@
     };
   }
 
+  /* =========================================================================
+     이상 신호 컨텍스트 자동 대조 (2026-09-22 추가) — 온도 · 교대 · 보정이력
+     ------------------------------------------------------------------------
+     위 findings는 "무엇이 이상한가"만 통계로 판단한다. 여기서는 그 이상 신호가
+     걸린 구간을, 이미 매 기록마다 입력받고 있는 컨텍스트(설비주변온도·교대)
+     그리고 ⑤디텍터 보정 이력과 자동으로 대조해서, CAUSE_HINTS의 고정 문구
+     대신 "이 데이터에서만 나올 수 있는" 구체적인 문장을 만든다. 이것도
+     AI가 아니라 평균 비교·비율 비교·날짜 근접 비교일 뿐이다 — 계산 근거를
+     항상 문장 안에 숫자로 남긴다.
+     표본이 적을 때 우연한 차이를 "원인"처럼 단정하면 오히려 현장에 잘못된
+     확신을 줄 수 있어, 아래 각 항목은 뚜렷한 차이가 날 때만(문턱값 이상)
+     문장을 만들고, 아니면 조용히 생략한다.
+     ========================================================================= */
+  function buildContextNote(points, findings) {
+    if (!findings.length) return null;
+    var maxWin = 0;
+    findings.forEach(function (f) { if (f.win && f.win > maxWin) maxWin = f.win; });
+    if (!maxWin || points.length <= maxWin) return null;
+
+    var win = points.slice(-maxWin);
+    var base = points.slice(0, -maxWin);
+    var lines = [];
+
+    // 1) 온도 — 이상 신호 구간과 그 이전 구간의 평균 설비주변온도를 비교한다.
+    // 온도 입력은 선택 항목이라 값이 없는 기록도 섞여 있을 수 있어, 유효한
+    // 값만 걸러 평균낸다. 1.0℃ 미만 차이는 측정 오차·자연 변동 범위로 보고
+    // 굳이 언급하지 않는다.
+    (function () {
+      var winTemps = win.map(function (p) { return p.temp; }).filter(function (t) { return typeof t === "number"; });
+      var baseTemps = base.map(function (p) { return p.temp; }).filter(function (t) { return typeof t === "number"; });
+      if (winTemps.length < 2 || baseTemps.length < 2) return;
+      var winAvg = mean(winTemps), baseAvg = mean(baseTemps);
+      var diff = winAvg - baseAvg;
+      if (Math.abs(diff) < 1.0) return;
+      lines.push("이상 신호 구간(최근 " + maxWin + "회)의 평균 설비주변온도는 " + fmt(Math.round(winAvg * 10) / 10) +
+        "℃로, 그 이전 평균(" + fmt(Math.round(baseAvg * 10) / 10) + "℃)보다 " +
+        (diff > 0 ? "약 " + fmt(Math.round(diff * 10) / 10) + "℃ 높았습니다" : "약 " + fmt(Math.round(-diff * 10) / 10) + "℃ 낮았습니다") + ".");
+    })();
+
+    // 2) 교대 — 이상 신호 구간의 야간 교대 비율이 전체 평균과 크게 다른지 본다.
+    // 표본이 적으면(비교 대상 전체가 6건 미만) 우연한 쏠림일 가능성이 커서
+    // 생략한다. 25%p 이상 차이 날 때만 언급한다.
+    (function () {
+      if (points.length < 6) return;
+      var winNight = win.filter(function (p) { return p.shift === "야간"; }).length / win.length;
+      var allNight = points.filter(function (p) { return p.shift === "야간"; }).length / points.length;
+      var diffPct = (winNight - allNight) * 100;
+      if (Math.abs(diffPct) < 25) return;
+      lines.push("이상 신호 구간 기록의 " + Math.round(winNight * 100) + "%가 야간 교대였습니다(전체 평균 " +
+        Math.round(allNight * 100) + "%) — 특정 교대에서만 나타나는 현상인지 확인해 보세요.");
+    })();
+
+    // 3) 보정 이력 — 이상 신호 구간이 시작되기 직전(최대 3일 전)이나 구간 안에
+    // 디텍터 보정 작업이 있었는지 대조한다. 보정은 그 설비를 지나는 모든
+    // 샘플에 영향을 주므로, 지금 보는 샘플이 아니어도(sid 무관) 이 채널의
+    // 보정 이력 전체를 대상으로 한다.
+    (function () {
+      var calib = (cur().calib || []);
+      if (!calib.length) return;
+      var windowStart = addDays(win[0].date, -3);
+      var hit = calib.filter(function (c) { return c.date >= windowStart && c.date <= win[win.length - 1].date; })
+        .sort(function (a, b) { return a.date < b.date ? 1 : -1; })[0];
+      if (!hit) return;
+      var rel = hit.date < win[0].date ? "시작되기 직전인" : "진행되는 중인";
+      lines.push("이 구간이 " + rel + " " + hit.date + "에 디텍터 보정 작업(" + esc(hit.sampleName || "—") +
+        ")이 있었습니다 — 시점이 겹치는지 확인해 보세요.");
+    })();
+
+    if (!lines.length) return null;
+    return lines;
+  }
+
   function renderTrendNote(points, sample) {
     var findings = detectTrend(points);
     var forecast = projectSpecBreach(points, sample);
+    var context = buildContextNote(points, findings);
     if (!findings.length && !forecast) return "";
     var items = findings.map(function (f) {
       var causes = CAUSE_HINTS[f.key] || [];
@@ -1706,10 +1788,15 @@
         '<div class="trend-detail">' + esc(forecast.detail) + '</div>' +
         "</div>"
       : "";
+    var contextHtml = context
+      ? '<div class="trend-item"><div class="trend-title">🔎 데이터 자동 대조</div>' +
+        context.map(function (l) { return '<div class="trend-plain">' + esc(l) + "</div>"; }).join("") +
+        "</div>"
+      : "";
     var headCount = findings.length + (forecast ? 1 : 0);
     return '<div class="trend-note">' +
       '<div class="trend-head">⚠ 추이 이상 신호 ' + headCount + '건</div>' +
-      items + forecastHtml +
+      items + forecastHtml + contextHtml +
       '<p class="trend-foot">스펙(상·하한) 이탈과는 별개로, 이 샘플의 평소 패턴과 통계적으로 다른 움직임을 자동으로 잡아낸 것입니다(통계 계산 — AI 판단이 아닙니다). 실제 원인은 현장에서 확인하세요 — 위 원인 목록은 일반적으로 흔한 사례이며, 이 설비 특성에 맞게 다듬어 쓰는 것을 권장합니다. 이 분석은 지금 보이는 주간·월간 기간과 무관하게 <b>이 샘플의 전체 기록</b>을 기준으로 계산합니다 — 위 날짜가 지금 그래프 기간 밖일 수 있습니다.</p>' +
       "</div>";
   }
@@ -2952,6 +3039,12 @@
             '<div class="trend-title">📉 추세 지속 시 ' + esc(forecast.limitName) + ' 도달 예상</div>' +
             '<div class="trend-plain">' + esc(forecast.plain) + '</div>' +
             '<div class="trend-detail">' + esc(forecast.detail) + '</div>' +
+            "</div>";
+        }
+        var context = buildContextNote(points, findings);
+        if (context) {
+          body += '<div class="help-live-finding"><div class="trend-title">🔎 데이터 자동 대조</div>' +
+            context.map(function (l) { return '<div class="trend-plain">' + esc(l) + "</div>"; }).join("") +
             "</div>";
         }
       }
