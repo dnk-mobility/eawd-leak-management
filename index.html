@@ -17,9 +17,12 @@
   /* ①~⑥ 섹션 색 구분(2026-09-21)은 취소됐다(2026-09-22) — 대신 모든 섹션의
      탭 부위(번호 배지 + 카드 위쪽 띠)를 원래의 단일 색(var(--navy), #1b4a49)보다
      더 진한 한 가지 색으로 통일한다. 펼쳤을 때 보이는 내용 칸(.body)은 건드리지
-     않는다 — 원래도 이 규칙들의 대상이 아니었다(styles.css의 흰 배경 그대로). */
-  .section{border-top:3px solid #102d2c;}
-  .section > summary .num{background:#102d2c;}
+     않는다 — 원래도 이 규칙들의 대상이 아니었다(styles.css의 흰 배경 그대로).
+     최초 시도(#102d2c)는 원래 남색과 톤이 비슷해 "안 바뀐 것 같다"는 피드백을
+     받아, 거의 검정에 가까운 훨씬 더 어두운 색으로 다시 낮추고 띠 두께도
+     3px→5px로 키워 한눈에 차이가 보이게 했다. */
+  .section{border-top:5px solid #05100f;}
+  .section > summary .num{background:#05100f;}
   .eq-tabs{
     display:flex;gap:6px;overflow-x:auto;padding:10px 14px 0;
     max-width:640px;margin:0 auto;-webkit-overflow-scrolling:touch;
@@ -249,26 +252,26 @@
   table.hist td.v{font-weight:700;font-variant-numeric:tabular-nums;}
   table.hist td.v.ng{color:#8f3226;}
 
-  /* 화면 하단에 뒀었으나(2026-09-22 발견), 필수 입력 누락 토스트처럼 숫자 입력칸에
-     focus()를 거는 경우와 함께 뜨면 모바일 On-Screen 키보드가 화면 아래쪽을
-     그만큼 가려서 "간헐적으로만 보인다"는 문제가 있었다 — 어떤 필드가 비었는지에
-     따라(날짜칸은 키보드가 안 뜨고, 숫자칸은 키보드가 뜸) 보이는 경우와 안 보이는
-     경우가 갈렸다. 키보드는 항상 화면 "아래"만 가리므로, 토스트를 위쪽으로 옮겨
-     키보드 유무와 무관하게 항상 보이게 했다.
+  /* 원래 화면 하단 고정이었으나(2026-09-22 발견), 필수 입력 누락 토스트처럼
+     숫자 입력칸에 focus()를 거는 경우와 함께 뜨면 모바일 On-Screen 키보드가
+     화면 아래쪽을 가려 "간헐적으로만 보인다"는 문제가 있었다. 이후 화면 상단
+     고정으로 한 번 옮겼다가, "그래도 잘 안 보인다"는 재신고로 포커스를 450ms
+     지연시키는 조치(§ focusMissing)까지 더했는데도 "모바일에서는 화면 정중앙에
+     떴으면 좋겠다"는 요청을 받아 — 어차피 포커스 지연 덕에 키보드가 뜨기 전에
+     토스트가 이미 보이므로, 위치를 상단이 아닌 **화면 정중앙**으로 바꿔도
+     키보드에 가려질 걱정이 없다. 기본값(모바일/터치)은 중앙, PC는 아래 미디어
+     쿼리로 화면 하단을 유지한다(PC는 애초에 키보드가 없어 하단이 자연스럽다).
   */
   .toast{
-    position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translateX(-50%);
+    position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
     background:var(--navy);color:#fff;font-size:13px;font-weight:700;
     padding:11px 18px;border-radius:999px;z-index:9000;
     box-shadow:0 6px 18px rgba(10,37,64,.28);
     opacity:0;transition:opacity .2s ease;pointer-events:none;max-width:88%;text-align:center;
   }
   .toast.show{opacity:1;}
-  /* PC(마우스로 정밀 클릭이 가능한 기기)에는 On-Screen 키보드가 없어 화면
-     하단을 가릴 것이 없다 — 상단 고정은 모바일 키보드 회피용 조치였으므로,
-     PC에서는 사용자가 지금 보고 있는 화면(뷰포트) 하단에 뜨도록 되돌린다. */
   @media (hover:hover) and (pointer:fine){
-    .toast{ top:auto; bottom:calc(26px + env(safe-area-inset-bottom,0px)); }
+    .toast{ top:auto; bottom:calc(26px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%); }
   }
 
   /* 맨 위로 이동 버튼 — 챗봇 버튼(#helpFab, z-index:300) 바로 위에 쌓아 겹치지
@@ -785,7 +788,7 @@
     t.textContent = msg;
     t.classList.add("show");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { t.classList.remove("show"); }, 2200);
+    toastTimer = setTimeout(function () { t.classList.remove("show"); }, 2500);
   }
 
   function sampleById(sid) {
@@ -2840,7 +2843,14 @@
       refreshSyncBar();
     })["catch"](function (err) {
       setSync("err", "연동 오류 — " + err.message);
-      if (reason === "manual") toast(err.message);
+      // 상단 띠 색(🔴)만으로는 작업자가 알아채기 어렵다는 지적을 받아, 수동으로
+      // [새로고침]을 눌렀을 때 실패하면 alert()로 확실히 눈에 띄게 알린다
+      // (연결 시험 실패 때 이미 쓰던 방식과 동일, §renderSyncSetup 참고).
+      if (reason === "manual") {
+        toast(err.message);
+        alert("구글시트 새로고침에 실패했습니다.\n\n" + err.message +
+          "\n\n전파가 약하거나 통신이 끊겼을 수 있습니다. 통신이 되는 곳에서 다시 시도해 주세요.");
+      }
     });
   }
 
