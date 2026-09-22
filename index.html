@@ -1026,13 +1026,22 @@
   // 필수 항목이 비어 있을 때 — 토스트로 어떤 항목인지 알리고, 그 입력칸으로
   // 스크롤 이동 + 포커스 + 붉은 테두리 강조를 준다. 강조는 사용자가 그 칸에
   // 뭔가 입력/변경하는 순간(첫 반응) 스스로 지워진다.
+  //
+  // focus()를 곧바로 부르지 않고 일부러 늦춘다 — 숫자 입력칸(설비주변온도·
+  // 누설값)에 focus()를 걸면 그 순간 폰 자판이 화면 아래에서 올라오는데, 이
+  // 자판은 웹페이지의 z-index와 무관한 OS 레벨 오버레이라 토스트를 화면 위로
+  // 옮겨도(§4-4) 자판이 그 위를 다시 덮어버릴 수 있다는 신고를 받았다. 토스트가
+  // 뜨고 화면이 스크롤되는 모습을 자판이 없는 상태로 먼저 눈에 담게 한 뒤에
+  // 자판을 올리면, 자판이 결과적으로 어디를 덮든 사용자는 이미 "무엇이
+  // 비었는지"를 본 뒤다. 지연 시간(450ms)은 토스트 페이드인(0.2s)과 스크롤
+  // 애니메이션이 얼추 끝나는 시점을 겨냥한 값이다.
   function focusMissing(el, msg) {
     toast(msg);
     el.classList.remove("field-missing");
     void el.offsetWidth; // 같은 칸이 연속으로 걸렸을 때도 펄스 애니메이션이 다시 재생되도록 강제 리플로우
     el.classList.add("field-missing");
     el.scrollIntoView({ behavior: "smooth", block: "center" });
-    el.focus();
+    setTimeout(function () { el.focus(); }, 450);
     var clear = function () {
       el.classList.remove("field-missing");
       el.removeEventListener("input", clear);
