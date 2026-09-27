@@ -14,6 +14,16 @@
     (QR코드 설비 정보시스템에서 가져온 공용 스타일 — 이 프로젝트는 그 시스템과 완전히 별개다).
   */
 
+  /* PC 화면에서 상단(.id-bar/.doc-header) 가로폭이 너무 크다는 지적(2026-09-28) —
+     styles.css의 main{max-width:640px}은 본문에만 걸려 있고, 상단 네이비 띠 안의
+     글자·표(title-grid)는 배경과 함께 뷰포트 전체 폭으로 늘어나 있었다(대시보드
+     화면은 .d-hero/.d-hero-inner로 이미 이 문제를 해결해 둔 것과 대조적). 배경은
+     지금처럼 화면 전체 폭을 채우되, 안의 내용물만 본문과 같은 640px로 가운데
+     정렬한다(styles.css는 안 고치고 이 파일에서 덮어쓰는 기존 관례를 따름). */
+  .id-bar{display:block;}
+  .id-bar-inner{max-width:640px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;}
+  .doc-header-inner{max-width:640px;margin:0 auto;}
+
   /* ①~⑥ 섹션 색 구분(2026-09-21)은 취소됐다(2026-09-22) — 대신 모든 섹션의
      탭 부위(번호 배지 + 카드 위쪽 띠)를 원래의 단일 색(var(--navy), #1b4a49)보다
      더 진한 한 가지 색으로 통일한다. 펼쳤을 때 보이는 내용 칸(.body)은 건드리지
@@ -440,8 +450,10 @@
 <noscript><style>body{visibility:hidden!important;}</style><div style="position:fixed;inset:0;z-index:999999;background:#1b4a49;color:#fff;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Malgun Gothic','Apple SD Gothic Neo',sans-serif;font-size:14px;line-height:1.6;">이 페이지는 자바스크립트가 필요합니다.<br>브라우저 설정에서 자바스크립트를 켠 뒤 다시 열어주세요.</div></noscript>
 
 <div class="id-bar">
-  <span>DnK MOBILITY · 후공정 생산기술팀</span>
-  <span class="product">e-AWD 70kW MOTOR HOUSING ASS'Y</span>
+  <div class="id-bar-inner">
+    <span>DnK MOBILITY · 후공정 생산기술팀</span>
+    <span class="product">e-AWD 70kW MOTOR HOUSING ASS'Y</span>
+  </div>
 </div>
 
 <div style="max-width:640px;margin:8px auto 0;padding:0 14px;">
@@ -449,18 +461,20 @@
 </div>
 
 <div class="doc-header">
-  <p class="doc-type">e-AWD 모터 하우징 누설값 관리 시스템 <span style="opacity:.7;font-weight:600;">· LEAK VALUE MANAGEMENT SYSTEM</span></p>
-  <h1 id="eqTitle">리크검사기</h1>
+  <div class="doc-header-inner">
+    <p class="doc-type">e-AWD 모터 하우징 누설값 관리 시스템 <span style="opacity:.7;font-weight:600;">· LEAK VALUE MANAGEMENT SYSTEM</span></p>
+    <h1 id="eqTitle">리크검사기</h1>
 
-  <div class="title-block">
-    <div class="title-grid">
-      <div class="cell wide"><span class="k">공정명 / 공정No.</span><span class="v" id="mProc">—</span></div>
-      <div class="cell"><span class="k">설비명</span><span class="v" id="mEq">—</span></div>
-      <div class="cell right"><span class="k">디텍터 사양</span><span class="v" id="mDet">—</span></div>
-      <div class="cell"><span class="k">테스트 압력</span><span class="v" id="mPres">—</span></div>
-      <div class="cell right"><span class="k">제품 판정 기준</span><span class="v" id="mCrit">—</span></div>
-      <div class="cell bottom"><span class="k">점검 주기</span><span class="v">시업 전 1회/shift</span></div>
-      <div class="cell right bottom"><span class="k">관련 문서</span><span class="v" id="mDoc">—</span></div>
+    <div class="title-block">
+      <div class="title-grid">
+        <div class="cell wide"><span class="k">공정명 / 공정No.</span><span class="v" id="mProc">—</span></div>
+        <div class="cell"><span class="k">설비명</span><span class="v" id="mEq">—</span></div>
+        <div class="cell right"><span class="k">디텍터 사양</span><span class="v" id="mDet">—</span></div>
+        <div class="cell"><span class="k">테스트 압력</span><span class="v" id="mPres">—</span></div>
+        <div class="cell right"><span class="k">제품 판정 기준</span><span class="v" id="mCrit">—</span></div>
+        <div class="cell bottom"><span class="k">점검 주기</span><span class="v">시업 전 1회/shift</span></div>
+        <div class="cell right bottom"><span class="k">관련 문서</span><span class="v" id="mDoc">—</span></div>
+      </div>
     </div>
   </div>
 </div>
