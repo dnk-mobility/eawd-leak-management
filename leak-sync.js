@@ -35,7 +35,7 @@
 
   var URL_KEY = "dnk_sync_url";        // 이 폰에만 적용되는 임시 주소 (시험용)
   var QUEUE_KEY = "dnk_sync_queue_v1"; // 아직 못 보낸 기록
-  var TIMEOUT_MS = 15000;
+  var TIMEOUT_MS = 25000;
 
   var seq = 0;
 
