@@ -46,6 +46,30 @@
   .eq-tab.on{background:var(--navy);border-color:var(--navy);color:#fff;}
   .eq-tab:active{opacity:.85;}
 
+  /* 현재 채널 고정 띠 (2026-10-07) — 아래로 스크롤해 채널 제목이 화면 밖으로 나가면
+     화면 맨 위에 내려와 붙는다. "지금 어느 채널을 보고 있는지" 확인하려고 맨 위까지
+     다시 올라가야 했다는 현장 의견에 따른 것. 누르면 채널 탭 위치로 올라간다.
+     z-index는 모달(200)·도움말(300)·토스트(9000)보다 낮게 둔다. */
+  .ch-sticky{
+    position:fixed;left:0;right:0;top:0;z-index:150;
+    background:var(--navy);color:#fff;box-shadow:0 2px 10px rgba(5,16,15,.28);
+    padding-top:env(safe-area-inset-top,0px);
+    transform:translateY(-110%);transition:transform .18s ease;
+  }
+  .ch-sticky.show{transform:translateY(0);}
+  .ch-sticky button{
+    display:flex;align-items:center;gap:8px;width:100%;max-width:640px;margin:0 auto;
+    padding:9px 14px;background:none;border:0;color:inherit;font-family:inherit;cursor:pointer;text-align:left;
+  }
+  .ch-sticky .cs-tag{
+    flex:0 0 auto;font-size:10.5px;font-weight:800;color:#1b4a49;background:#f2c879;
+    border-radius:999px;padding:2px 8px;
+  }
+  .ch-sticky .cs-name{flex:0 1 auto;min-width:0;font-size:14px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ch-sticky .cs-proc{flex:0 0 auto;font-size:12px;font-weight:700;opacity:.75;}
+  .ch-sticky .cs-go{flex:0 0 auto;margin-left:auto;font-size:12px;opacity:.8;}
+  @media (prefers-reduced-motion:reduce){ .ch-sticky{transition:none;} }
+
   .period-bar{max-width:640px;margin:10px auto 0;padding:0 14px;}
   .period-bar .seg{max-width:220px;}
 
@@ -480,6 +504,15 @@
 </div>
 
 <div class="eq-tabs" id="eqTabs"></div>
+
+<div class="ch-sticky" id="chSticky" aria-hidden="true">
+  <button type="button" id="chStickyBtn" tabindex="-1" aria-label="채널 변경 — 맨 위로">
+    <span class="cs-tag">현재 채널</span>
+    <span class="cs-name" id="chStickyName">—</span>
+    <span class="cs-proc" id="chStickyProc"></span>
+    <span class="cs-go" aria-hidden="true">▲</span>
+  </button>
+</div>
 
 <div class="period-bar">
   <div class="seg" id="periodSeg">
@@ -944,6 +977,11 @@
     $("mPres").textContent = e.pres;
     $("mCrit").textContent = e.crit;
     $("mDoc").textContent = e.doc;
+    // 현재 채널 고정 띠 — 공정명 끝의 "· 120" 같은 공정 번호만 따로 붙인다
+    // 폰 한 줄에 들어가도록 긴 제목(e.title) 대신 탭 이름(e.tab)을 쓴다
+    $("chStickyName").textContent = e.tab;
+    var procNo = String(e.proc || "").split("·").pop().trim();
+    $("chStickyProc").textContent = procNo && procNo !== e.proc ? "No." + procNo : "";
 
     var tabs = $("eqTabs");
     tabs.innerHTML = "";
@@ -3457,6 +3495,29 @@
     });
   }
 
+  // 현재 채널 고정 띠 — 채널 탭 줄이 화면 위로 완전히 사라지면 보이고, 다시 보이면 숨는다.
+  function initChSticky() {
+    var bar = $("chSticky"), btn = $("chStickyBtn"), tabs = $("eqTabs");
+    var shown = false;
+    // 위치 계산 1번 + 상태가 바뀔 때만 클래스 변경 — 스크롤마다 바로 불러도 가볍다
+    function update() {
+      var on = tabs.getBoundingClientRect().bottom < 0;
+      if (on === shown) return;
+      shown = on;
+      bar.classList.toggle("show", on);
+      bar.setAttribute("aria-hidden", on ? "false" : "true");
+      btn.tabIndex = on ? 0 : -1;
+    }
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    update();
+    btn.addEventListener("click", function () {
+      var reduceMotion = false;
+      try { reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
+      window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+    });
+  }
+
   /* =========================================================================
      교대 선택
      ========================================================================= */
@@ -3639,6 +3700,7 @@
 
     initHelp();
     initToTop();
+    initChSticky();
 
     renderAll();
     syncNow("auto");
