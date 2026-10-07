@@ -222,6 +222,10 @@
   }
   .srow .shead{display:flex;align-items:center;gap:7px;margin-bottom:7px;}
   .srow .sname{font-size:13px;font-weight:700;color:var(--gray-900);}
+  /* 샘플 이름 오른쪽 QR 코드 번호 (2026-10-07) — ④ 스펙 관리에서 등록한 값 */
+  .srow .sqr{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;vertical-align:1px;
+    background:var(--gray-100,#efeae0);border:1px solid var(--gray-300,#d8d2c4);
+    font-size:10.5px;font-weight:700;color:var(--gray-700,#5c5449);font-variant-numeric:tabular-nums;white-space:nowrap;}
   .srow .sspec{font-size:10.5px;color:var(--gray-500);font-variant-numeric:tabular-nums;margin-top:1px;}
   .srow .sin{display:flex;align-items:center;gap:8px;}
   .srow .sin input{
@@ -1093,7 +1097,7 @@
         '<div class="shead">' +
           '<span class="badge type' + (s.type === "NG" ? " ngm" : "") + '">' + esc(s.type) + '</span>' +
           '<div style="flex:1;min-width:0;">' +
-            '<div class="sname">' + esc(s.name) + '</div>' +
+            '<div class="sname">' + esc(s.name) + (s.qrNo ? '<span class="sqr">QR ' + esc(s.qrNo) + '</span>' : '') + '</div>' +
             '<div class="sspec">' + esc(specText(s)) + '</div>' +
           '</div>' +
           '<span class="badge na" data-role="judge">—</span>' +
