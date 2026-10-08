@@ -82,7 +82,7 @@
   // sessionStorage라 탭을 닫으면 초기화된다 — 다음에 QR을 다시 찍어 새 탭이 열리면
   // 인트로가 다시 재생된다.
   var INTRO_KEY = "leak_trend_intro_shown_v1";
-  var PASS_HASH = "6712da30aaaa05bee4d101db4fd64542e8ac7176769bab88f87e826456678fa9";
+  var PASS_HASH = "18ac3e7343f016890c510e93f935261169d9e3f565436429830faf0934f4f8e4";
 
   // 연출 속도를 조정할 때는 TAIL_MS부터 만진다.
   // 등장 시간(duration)을 늘리면 "또렷해지는 시점"만 뒤로 밀릴 뿐, 또렷한 상태로
