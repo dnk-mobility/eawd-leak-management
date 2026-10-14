@@ -86,7 +86,16 @@
   .d-name{font-size:13.5px;font-weight:800;color:var(--gray-900);}
   .d-no{font-size:10.5px;color:var(--gray-400);}
   .d-chev{margin-left:auto;color:var(--gray-400);font-size:15px;}
-  .d-spark{width:100%;height:46px;margin-top:9px;display:block;}
+  .d-spark{width:100%;height:46px;margin-top:4px;display:block;}
+  /* 샘플별 미니 그래프 — OK 마스터·NG 마스터를 나란히(좁으면 아래로 줄바꿈) */
+  .d-sparks{display:grid;grid-template-columns:repeat(auto-fit,minmax(138px,1fr));gap:4px 12px;margin-top:9px;}
+  .d-cell{min-width:0;}
+  .d-clabel{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--gray-700);}
+  .d-ctype{flex:0 0 auto;font-size:9px;font-weight:800;color:#fff;border-radius:4px;padding:1px 5px;}
+  .d-ctype.okm{background:#1b4a49;}
+  .d-ctype.ngm{background:#8a5a1d;}
+  .d-cname{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700;}
+  .d-empty-s{margin-top:4px;padding:14px 0;border:1px dashed var(--gray-300);border-radius:6px;}
   .d-foot{font-size:11px;color:var(--gray-700);margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .d-flag{font-size:10px;font-weight:800;color:var(--warn-text);background:var(--warn-bg);padding:1px 6px;border-radius:5px;}
   .d-empty{font-size:11px;color:var(--gray-400);margin-top:9px;padding:10px 0;text-align:center;}
@@ -327,23 +336,27 @@
       todayStatus = anyNg ? "ng" : "ok";
     }
 
-    // 미니 그래프·이상신호는 대표로 첫 샘플 하나만 쓴다(카드 하나에 여러 샘플을
-    // 다 넣으면 좁은 화면에서 복잡해진다 — 나머지는 상세 화면에서 확인).
-    var s0 = e.samples && e.samples[0];
-    var pts = [];
-    if (s0) {
-      monthRecs.slice().sort(function (a, b) {
-        return a.date === b.date ? (a.shift === b.shift ? 0 : a.shift === "야간" ? 1 : -1) : (a.date < b.date ? -1 : 1);
-      }).forEach(function (r) {
-        r.items.forEach(function (it) { if (it.sid === s0.id && it.v !== null) pts.push(it.v); });
+    // 미니 그래프·이상신호는 사용 중인 마스터 샘플마다 하나씩 그린다(OK 마스터·NG 마스터
+    // 각각 — 스펙 범위가 서로 달라 한 그래프에 섞지 않고 나란히 둔다). 2026-10-14:
+    // 예전에는 첫 샘플(OK 마스터)만 그려서 NG 마스터의 추이는 카드에서 볼 수 없었다.
+    var active = (e.samples || []).filter(function (s) { return !s.retired; });
+    var sorted = monthRecs.slice().sort(function (a, b) {
+      return a.date === b.date ? (a.shift === b.shift ? 0 : a.shift === "야간" ? 1 : -1) : (a.date < b.date ? -1 : 1);
+    });
+    var series = active.map(function (s) {
+      var pts = [], lastJudge = "-";
+      sorted.forEach(function (r) {
+        r.items.forEach(function (it) {
+          if (it.sid === s.id && it.v !== null) { pts.push(it.v); lastJudge = it.judge; }
+        });
       });
-    }
-    var anomaly = hasAnomaly(pts);
+      return { name: s.name, type: s.type === "NG" ? "NG" : "OK", pts: pts, lastJudge: lastJudge,
+               spec: { lsl: s.lsl, usl: s.usl }, anomaly: hasAnomaly(pts) };
+    });
 
     return {
-      todayStatus: todayStatus, ngCount: ngCount, recordCount: monthRecs.length, pts: pts,
-      anomaly: anomaly, sampleName: s0 ? s0.name : "",
-      spec: s0 ? { lsl: s0.lsl, usl: s0.usl } : null
+      todayStatus: todayStatus, ngCount: ngCount, recordCount: monthRecs.length,
+      series: series, anomaly: series.some(function (x) { return x.anomaly; })
     };
   }
 
@@ -367,6 +380,7 @@
     lo -= span * 0.15; hi += span * 0.15;
     function X(i) { return pts.length === 1 ? (PL + (W - PL - PR) / 2) : PL + (W - PL - PR) * (i / (pts.length - 1)); }
     function Y(v) { return top + (base - top) * (1 - (v - lo) / (hi - lo)); }
+    // status: "ng"(빨강) | "wait"(회색) | 그 외(청록)
     var color = status === "ng" ? "#b8453a" : status === "wait" ? "#b3a896" : "#2f6e6c";
     // polyline points="x,y x,y .." 형식과 path d="M.. L.." 형식은 문법이 다르다
     // (구현 중 자체 발견 — 처음엔 둘을 한 변수로 같이 쓰려다 <polyline>에 속성이
@@ -410,19 +424,26 @@
     var badgeHtml = st.todayStatus === "ng"
       ? '<span class="d-badge ng"><span class="txt">NG</span></span>'
       : '<span class="d-badge ' + st.todayStatus + '">' + badgeTxt + '</span>';
-    var spark = sparkSvg(st.pts, st.todayStatus, st.spec);
-    var flag = st.anomaly ? '<span class="d-flag">⚠ 추이 이상</span>' : "";
+    var anomNames = st.series.filter(function (x) { return x.anomaly; }).map(function (x) { return x.name; });
+    var flag = st.anomaly ? '<span class="d-flag">⚠ 추이 이상' +
+      (st.series.length > 1 ? " · " + esc(anomNames.join(", ")) : "") + '</span>' : "";
     var footText = st.todayStatus === "wait"
       ? "이번 달 NG " + st.ngCount + "건 · 오늘 아직 입력 없음"
       : "이번 달 NG " + st.ngCount + "건 · " + st.recordCount + "회 기록";
-    // 그래프는 대표 샘플(samples[0]) 하나만 쓰지만, NG 건수·기록 횟수는 그 채널의
-    // 모든 샘플을 합친 값이다 — 그래서 "이번 달 NG 1건"인데 그래프는 비어 있을 수
-    // 있다(NG가 다른 샘플에서 났을 때). 이 경우 "이번 달 기록이 아직 없습니다"라고
-    // 하면 바로 아래 NG 건수 문구와 모순돼 보인다(구현 중 실제 데이터로 재현해
-    // 발견). 전체 기록 유무(recordCount)로 문구를 나눠 모순을 없앤다.
+    // 샘플마다 칸 하나. 한 샘플이라도 그릴 수 있으면 그 칸은 그래프, 못 그리는 칸은
+    // "기록 부족" 안내. 모든 칸이 비었을 때만 카드 전체 안내(전체 기록 유무로 문구 구분 —
+    // "이번 달 NG 1건"인데 "기록이 아직 없습니다"라고 하면 모순돼 보이므로).
+    var cells = st.series.map(function (x) {
+      var svg = sparkSvg(x.pts, st.todayStatus === "wait" ? "wait" : (x.lastJudge === "NG" ? "ng" : "ok"), x.spec);
+      return '<div class="d-cell"><div class="d-clabel"><span class="d-ctype ' + (x.type === "NG" ? "ngm" : "okm") + '">' + x.type + '</span>' +
+        '<span class="d-cname">' + esc(x.name) + '</span></div>' +
+        (svg || '<div class="d-empty d-empty-s">기록 부족</div>') + '</div>';
+    });
+    var anyGraph = st.series.some(function (x) { return x.pts.length >= 2; });
     var emptyMsg = st.recordCount === 0
       ? "이번 달 기록이 아직 없습니다"
-      : "대표 샘플(" + esc(st.sampleName || "-") + ") 그래프를 그릴 데이터가 부족합니다";
+      : "이번 달 그래프를 그릴 데이터가 부족합니다";
+    var graphHtml = anyGraph ? '<div class="d-sparks">' + cells.join("") + '</div>' : '<div class="d-empty">' + emptyMsg + '</div>';
 
     return '<a class="d-card ' + st.todayStatus + '" href="index.html?eq=' + encodeURIComponent(id) + '">' +
       '<div class="d-row1">' + badgeHtml +
@@ -430,7 +451,7 @@
         '<span class="d-no">' + esc(id) + '</span>' +
         '<span class="d-chev">›</span>' +
       '</div>' +
-      (spark || '<div class="d-empty">' + emptyMsg + '</div>') +
+      graphHtml +
       '<div class="d-foot">' + footText + (flag ? " " + flag : "") + '</div>' +
       '</a>';
   }
@@ -471,9 +492,9 @@
     { q: "이 화면(전체 현황)은 뭔가요?", keywords: "대시보드 전체현황 요약 카드 화면",
       a: "6개 채널을 QR로 하나씩 찍지 않고 한 화면에서 오늘 상태(정상/NG/미점검)를 요약해서 보여줍니다. 카드를 누르면 그 채널의 상세 입력·그래프 화면으로 이동합니다." },
     { q: "⚠ 추이 이상 배지는 뭔가요?", keywords: "추이 이상 배지 경고 노란상자",
-      a: "그 채널의 대표 샘플이 평소 패턴과 통계적으로 다르게 움직이고 있다는 뜻입니다. 스펙 안이어도 표시될 수 있고, 아직 불량은 아니어도 미리 확인해 보라는 신호입니다. 카드를 눌러 들어가면 자세한 원인 힌트를 볼 수 있습니다." },
+      a: "그 채널의 마스터 샘플(OK·NG 마스터 중 하나 이상)이 평소 패턴과 통계적으로 다르게 움직이고 있다는 뜻입니다. 어느 샘플인지는 배지에 이름이 함께 표시됩니다. 스펙 안이어도 표시될 수 있고, 아직 불량은 아니어도 미리 확인해 보라는 신호입니다. 카드를 눌러 들어가면 자세한 원인 힌트를 볼 수 있습니다." },
     { q: "카드에 그래프가 안 보여요", keywords: "그래프 없음 빈 카드 데이터 부족",
-      a: "그 채널의 대표 샘플(첫 번째로 등록된 샘플)로 이번 달 기록이 부족하면 그래프 대신 안내 문구가 뜹니다. 카드를 눌러 들어가면 다른 샘플의 기록은 있는지 확인할 수 있습니다." },
+      a: "카드에는 마스터 샘플(OK 마스터·NG 마스터)마다 그래프가 하나씩 나옵니다. 이번 달 기록이 2건 미만인 샘플은 그래프 대신 「기록 부족」으로 표시되고, 모든 샘플이 그렇다면 카드 전체에 안내 문구가 뜹니다. 카드를 눌러 들어가면 전체 기록을 확인할 수 있습니다." },
     { q: "일부 채널을 불러오지 못했다고 나와요", keywords: "연동 오류 일부 채널 불러오기 실패",
       a: "구글시트 연동이 일시적으로 응답하지 않은 것입니다. 그 채널은 이 폰에 저장된 이전 기록으로 표시됩니다. 잠시 후 새로고침하면 대부분 해결됩니다." },
     { q: "다른 사람이 입력한 값이 안 보여요", keywords: "동기화 연동 안됨 새로고침",
