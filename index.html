@@ -239,6 +239,18 @@
   .srow .sin input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
   .srow .unit{font-size:11px;color:var(--gray-500);flex-shrink:0;}
 
+  /* ± 부호 버튼 (2026-10-29) — 아이폰의 숫자 자판(inputmode="decimal")에는 마이너스(-) 키가 없어
+     음수 누설값을 입력할 수 없다는 현장 신고. 숫자 입력칸 옆에 두고 누르면 부호를 바꾼다. */
+  .signbtn{
+    flex:0 0 auto;min-width:44px;height:44px;padding:0 8px;box-sizing:border-box;
+    border:1px solid var(--gray-300);border-radius:8px;background:var(--white);
+    color:var(--navy);font-family:inherit;font-size:17px;font-weight:800;line-height:1;cursor:pointer;
+    -webkit-tap-highlight-color:transparent;touch-action:manipulation;
+  }
+  .signbtn:active{background:var(--gray-100);}
+  .numwrap{display:flex;align-items:stretch;gap:6px;}
+  .numwrap > input{flex:1 1 auto;min-width:0;}
+
   .badge{
     font-size:10px;font-weight:800;padding:2px 7px;border-radius:4px;flex-shrink:0;
     letter-spacing:.02em;
@@ -3637,6 +3649,78 @@
     refreshSyncBar();
   }
 
+  /* =========================================================================
+     숫자 입력칸 — 음수 입력 지원 (2026-10-29)
+     아이폰은 inputmode="decimal" 자판에 마이너스(-) 키가 없다(숫자 전용 자판). 그래서
+     ① 입력칸을 type="text"(+ 숫자 자판 유지)로 바꾸고 ② 칸 옆에 [±] 버튼을 붙여
+     부호를 바꿀 수 있게 하고 ③ 글자·기호가 섞여 들어오지 않게 입력 중에 걸러낸다.
+     type="number"는 "-" 단독이나 "1." 같은 중간 상태를 .value가 빈 문자열로 돌려줘
+     부호 버튼을 만들 수 없다. 칸은 여러 화면(입력·스펙·보정 이력)에서 문자열로 새로
+     그려지므로, 한 곳에서 MutationObserver로 새로 생긴 칸을 찾아 한꺼번에 처리한다.
+     ========================================================================= */
+  function cleanNumText(s) {
+    s = String(s).replace(/[−–—]/g, "-").replace(/,/g, ".").replace(/[^0-9.\-]/g, "");
+    var neg = s.charAt(0) === "-";
+    s = s.replace(/-/g, "");
+    var i = s.indexOf(".");
+    if (i >= 0) s = s.slice(0, i + 1) + s.slice(i + 1).replace(/\./g, "");
+    return (neg ? "-" : "") + s;
+  }
+
+  function flipSign(el) {
+    var v = String(el.value || "");
+    el.value = v.charAt(0) === "-" ? v.slice(1) : "-" + v;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function enhanceNumInputs(root) {
+    var list = root.querySelectorAll('input[inputmode="decimal"]:not([data-signed])');
+    for (var k = 0; k < list.length; k++) {
+      (function (el) {
+        el.setAttribute("data-signed", "1");
+        el.type = "text";
+        el.removeAttribute("step");
+        el.setAttribute("autocomplete", "off");
+        el.addEventListener("input", function () {
+          var c = cleanNumText(el.value);
+          if (c !== el.value) el.value = c;
+        });
+
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "signbtn";
+        btn.textContent = "±";
+        btn.setAttribute("aria-label", "부호 바꾸기 (+ ↔ -)");
+        // 버튼을 눌러도 입력칸의 포커스(=폰 자판)가 풀리지 않게 pointerdown에서 처리한다.
+        // 키보드(Enter/Space)로 누른 경우만 click(detail===0)에서 처리해 두 번 바뀌지 않게 한다.
+        btn.addEventListener("pointerdown", function (e) { e.preventDefault(); flipSign(el); });
+        btn.addEventListener("click", function (e) { if (e.detail === 0) flipSign(el); });
+
+        var parent = el.parentNode;
+        var isFlex = false;
+        try { isFlex = getComputedStyle(parent).display.indexOf("flex") >= 0; } catch (err) {}
+        if (isFlex) {
+          parent.insertBefore(btn, el.nextSibling);
+        } else {
+          var wrap = document.createElement("div");
+          wrap.className = "numwrap";
+          parent.insertBefore(wrap, el);
+          wrap.appendChild(el);
+          wrap.appendChild(btn);
+        }
+      })(list[k]);
+    }
+  }
+
+  function initSignedInputs() {
+    enhanceNumInputs(document);
+    var t = null;
+    new MutationObserver(function () {
+      clearTimeout(t);
+      t = setTimeout(function () { enhanceNumInputs(document); }, 0);
+    }).observe(document.body, { childList: true, subtree: true });
+  }
+
   function init() {
     load();
 
@@ -3705,6 +3789,7 @@
     initHelp();
     initToTop();
     initChSticky();
+    initSignedInputs();
 
     renderAll();
     syncNow("auto");
