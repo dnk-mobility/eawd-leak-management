@@ -1297,6 +1297,7 @@
     // titleLine1/2: 이미지로 저장했을 때도 어느 설비·샘플·월 그래프인지 알 수 있도록
     // SVG 안에 직접 그려 넣는 제목 (화면의 .ch-head/.ch-spec와 같은 내용을 중복 기재)
     opts = opts || {};
+    var unit = opts.unit || UNIT;          // Y축 단위 — 온도 그래프는 ℃ (2026-11-16)
     var W = opts.w || 320, H = opts.h || 205, PL = 40, PR = 12, PT = 34, PB = 30;
 
     var vals = points.map(function (p) { return p.v; });
@@ -1318,7 +1319,7 @@
     }
 
     var svg = [];
-    svg.push('<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(s.name) + ' 누설값 추이">');
+    svg.push('<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(s.name) + ' 추이">');
     svg.push('<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="#fff"/>');
     if (titleLine1) svg.push('<text x="' + PL + '" y="9" font-size="8.5" font-weight="700" fill="#1b4a49">' + esc(titleLine1) + '</text>');
     if (titleLine2) svg.push('<text x="' + PL + '" y="19" font-size="7.5" fill="#5c5449">' + esc(titleLine2) + '</text>');
@@ -1482,12 +1483,12 @@
 
     var xCaption = opts.xCaption || ("일자 (" + periodLabel() + ")");
     svg.push('<text x="' + PL + '" y="' + (H - 4) + '" font-size="7.5" fill="#b3a896">' + esc(xCaption) + '</text>');
-    svg.push('<text x="' + (PL - 5) + '" y="' + (PT - 5) + '" font-size="7.5" fill="#b3a896" text-anchor="end">' + UNIT + '</text>');
+    svg.push('<text x="' + (PL - 5) + '" y="' + (PT - 5) + '" font-size="7.5" fill="#b3a896" text-anchor="end">' + esc(unit) + '</text>');
     svg.push("</svg>");
 
     return {
       svg: svg.join(""),
-      w: W, h: H,
+      w: W, h: H, unit: unit,
       xy: points.map(function (p, i) { return { x: X(i), y: Y(p.v) }; }),
       reg: reg
     };
@@ -1500,10 +1501,11 @@
     return "거의 없음";
   }
 
-  function regressionStatsHtml(reg) {
+  function regressionStatsHtml(reg, unit) {
     if (!reg) return "";
+    unit = unit || UNIT;
     var perStep = reg.slope >= 0 ? "+" + fmt(Math.round(reg.slope * 1000) / 1000) : fmt(Math.round(reg.slope * 1000) / 1000);
-    return '<div class="ch-regress">추세선(회귀분석): 측정 1회당 ' + perStep + ' ' + UNIT +
+    return '<div class="ch-regress">추세선(회귀분석): 측정 1회당 ' + perStep + ' ' + unit +
       ' · R² ' + fmt(Math.round(reg.r2 * 1000) / 1000) + '(직선에 가까운 정도: ' + r2Gloss(reg.r2) + ')</div>';
   }
 
@@ -1533,8 +1535,8 @@
       var scale = rect.width / chart.w;
 
       tip.innerHTML =
-        '<span class="v">' + esc(fmt(p.v)) + "</span> " + UNIT +
-        '<span class="j' + (p.judge === "NG" ? " ng" : "") + '">' + esc(p.judge || "—") + "</span>" +
+        '<span class="v">' + esc(fmt(p.v)) + "</span> " + esc(chart.unit || UNIT) +
+        (p.judge ? '<span class="j' + (p.judge === "NG" ? " ng" : "") + '">' + esc(p.judge) + "</span>" : "") +
         '<br><span class="d">' + esc(p.date) + " · " + esc(p.shift) + "</span>";
 
       // SVG 요소에는 offsetLeft/offsetTop이 없으므로 카드와의 위치 차이로 계산한다
@@ -2113,6 +2115,48 @@
 
     if (!drawn) {
       body.innerHTML = '<div class="empty">' + esc(periodLabel()) + '에 입력된 누설값이 없습니다.</div>';
+      return;
+    }
+
+    // 설비주변온도 추이 (2026-11-16) — 누설값이 오르내릴 때 온도가 같이 움직였는지 눈으로
+    // 대조하려고 누설값 그래프 바로 아래에 같은 기간·같은 가로축으로 둔다. 스펙이 없으므로
+    // 합격 범위·NG 표시는 없다. 온도를 입력하지 않은 기록은 건너뛴다.
+    var tPoints = [];
+    recs.forEach(function (r) {
+      if (typeof r.temp !== "number") return;
+      tPoints.push({
+        label: parseInt(r.date.slice(8, 10), 10) +
+          (period === "week" ? "(" + weekdayKo(r.date) + ")" : "") +
+          (r.shift === "야간" ? "야" : ""),
+        v: r.temp, judge: "", date: r.date, shift: r.shift
+      });
+    });
+    if (tPoints.length) {
+      var tSample = { id: "temp", name: "설비주변온도", type: "", lsl: null, usl: null, nominal: null, retired: false };
+      var tVals = tPoints.map(function (p) { return p.v; });
+      var tMin = Math.min.apply(null, tVals), tMax = Math.max.apply(null, tVals);
+      var tChart = buildChart(tSample, tPoints,
+        EQ[eqId].title + " · " + periodTitle(),
+        "설비주변온도 · 최저 " + fmt(tMin) + "℃ ~ 최고 " + fmt(tMax) + "℃", { unit: "℃" });
+      var tCard = document.createElement("div");
+      tCard.className = "chart-card";
+      tCard.innerHTML =
+        '<div class="ch-head">' +
+          '<span class="badge type" style="background:#8a6d3b;">온도</span>' +
+          '<span class="ch-name">설비주변온도</span>' +
+          '<span class="badge ok" style="margin-left:auto;">' + fmt(tMin) + ' ~ ' + fmt(tMax) + '℃</span>' +
+        '</div>' +
+        '<div class="ch-spec">점검할 때 입력한 온도 · ' + tPoints.length + '회 기록</div>' +
+        tChart.svg +
+        regressionStatsHtml(tChart.reg, "℃") +
+        '<div class="ch-legend">' +
+          '<span><i style="background:#2f6e6c;"></i>설비주변온도</span>' +
+          '<span><i style="background:#a8752f;"></i>추세선(회귀분석)</span>' +
+          '<span style="width:100%;">위 누설값 그래프와 같은 일자 순서입니다 — 누설값이 튄 날 온도도 함께 움직였는지 비교해 보세요</span>' +
+          '<span style="width:100%;">점을 터치하면 그때 값이 표시됩니다</span>' +
+        '</div>';
+      body.appendChild(tCard);
+      attachChartTouch(tCard, tChart, tPoints);
     }
   }
 
