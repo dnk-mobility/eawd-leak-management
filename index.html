@@ -2132,26 +2132,38 @@
       });
     });
     if (tPoints.length) {
-      var tSample = { id: "temp", name: "설비주변온도", type: "", lsl: null, usl: null, nominal: null, retired: false };
+      var ts = getTempSpec(eqId);
+      var hasTs = ts.lsl !== null || ts.usl !== null || ts.nominal !== null;
+      var tSample = { id: "temp", name: "설비주변온도", type: "", lsl: ts.lsl, usl: ts.usl, nominal: ts.nominal, retired: false };
+      // 스펙을 등록했으면 범위를 벗어난 점은 NG와 같은 빨간 점으로 표시한다
+      tPoints.forEach(function (p) {
+        var j = judge(p.v, ts.lsl, ts.usl);
+        p.judge = j === "-" ? "" : j;
+      });
+      var tNg = tPoints.filter(function (p) { return p.judge === "NG"; }).length;
       var tVals = tPoints.map(function (p) { return p.v; });
       var tMin = Math.min.apply(null, tVals), tMax = Math.max.apply(null, tVals);
       var tChart = buildChart(tSample, tPoints,
         EQ[eqId].title + " · " + periodTitle(),
-        "설비주변온도 · 최저 " + fmt(tMin) + "℃ ~ 최고 " + fmt(tMax) + "℃", { unit: "℃" });
+        "설비주변온도 · " + (hasTs ? tempSpecText(ts) : "최저 " + fmt(tMin) + "℃ ~ 최고 " + fmt(tMax) + "℃") +
+          (hasTs ? " · " + (tNg ? "범위 이탈 " + tNg + "건" : "전건 범위 안") : ""), { unit: "℃" });
       var tCard = document.createElement("div");
       tCard.className = "chart-card";
       tCard.innerHTML =
         '<div class="ch-head">' +
           '<span class="badge type" style="background:#8a6d3b;">온도</span>' +
           '<span class="ch-name">설비주변온도</span>' +
-          '<span class="badge ok" style="margin-left:auto;">' + fmt(tMin) + ' ~ ' + fmt(tMax) + '℃</span>' +
+          '<span class="badge ' + (tNg ? "ng" : "ok") + '" style="margin-left:auto;">' +
+            (hasTs ? (tNg ? "범위 이탈 " + tNg + "건" : "전건 범위 안") : fmt(tMin) + ' ~ ' + fmt(tMax) + '℃') + '</span>' +
         '</div>' +
-        '<div class="ch-spec">점검할 때 입력한 온도 · ' + tPoints.length + '회 기록</div>' +
+        '<div class="ch-spec">' + (hasTs ? esc(tempSpecText(ts)) : '온도 스펙 미등록 — ④에서 등록하면 스펙 선이 표시됩니다') +
+          ' · ' + tPoints.length + '회 기록</div>' +
         tChart.svg +
         regressionStatsHtml(tChart.reg, "℃") +
         '<div class="ch-legend">' +
           '<span><i style="background:#2f6e6c;"></i>설비주변온도</span>' +
           '<span><i style="background:#a8752f;"></i>추세선(회귀분석)</span>' +
+          (hasTs ? '<span><i style="background:#b8453a;"></i>상·하한</span><span><i style="background:#e3eedc;height:8px;"></i>합격 범위</span>' : '') +
           '<span style="width:100%;">위 누설값 그래프와 같은 일자 순서입니다 — 누설값이 튄 날 온도도 함께 움직였는지 비교해 보세요</span>' +
           '<span style="width:100%;">점을 터치하면 그때 값이 표시됩니다</span>' +
         '</div>';
@@ -2240,6 +2252,53 @@
   /* =========================================================================
      ④ 마스터 샘플 · 스펙 관리
      ========================================================================= */
+  // 설비주변온도 스펙 (2026-11-16) — 채널(공정No.)마다 지정값·하한·상한을 둔다.
+  // 구글시트의 "설정" 시트(키/값)에 "tempSpec:<공정No.>" = "지정값|하한|상한" 으로 저장해
+  // 모든 폰이 같은 값을 본다 — 기존 설정 저장 경로(setSetting)를 그대로 써서
+  // Apps Script를 다시 배포할 필요가 없다. 비어 있는 칸은 빈 문자열.
+  function getTempSpec(id) {
+    var raw = db.settings && db.settings["tempSpec:" + id];
+    var p = String(raw || "").split("|");
+    return { nominal: num(p[0]), lsl: num(p[1]), usl: num(p[2]) };
+  }
+  function tempSpecText(ts) {
+    var parts = [];
+    if (ts.nominal !== null) parts.push("지정 " + fmt(ts.nominal));
+    if (ts.lsl !== null || ts.usl !== null) {
+      parts.push("스펙 " + (ts.lsl !== null ? fmt(ts.lsl) : "") + " ~ " + (ts.usl !== null ? fmt(ts.usl) : ""));
+    }
+    return parts.length ? parts.join(" · ") + " ℃" : "";
+  }
+
+  function renderTempSpecCard(body) {
+    var ts = getTempSpec(eqId);
+    var box = document.createElement("div");
+    box.className = "srow";
+    box.innerHTML =
+      '<div class="sname" style="margin-bottom:6px;">설비주변온도 스펙 ' +
+        '<span class="badge type" style="background:#8a6d3b;">온도</span></div>' +
+      '<p class="hint" style="margin:0 0 8px;">이 채널의 설비주변온도 기준입니다. 입력하면 ② 온도 그래프에 스펙 선·합격 범위가 표시되고, 범위를 벗어난 점은 빨간색으로 나타납니다. 비워 두면 선 없이 그려집니다.</p>' +
+      '<div class="fld-row">' +
+        '<div class="fld"><label>지정값 (℃)</label><input type="number" step="0.1" inputmode="decimal" data-f="nominal" value="' + esc(fmt(ts.nominal)) + '" placeholder="—"></div>' +
+        '<div class="fld"><label>하한값 (℃)</label><input type="number" step="0.1" inputmode="decimal" data-f="lsl" value="' + esc(fmt(ts.lsl)) + '" placeholder="—"></div>' +
+        '<div class="fld"><label>상한값 (℃)</label><input type="number" step="0.1" inputmode="decimal" data-f="usl" value="' + esc(fmt(ts.usl)) + '" placeholder="—"></div>' +
+      '</div>' +
+      '<div class="btn-row"><button class="btn sub" data-a="tempSpec">온도 스펙 저장</button></div>';
+    box.querySelector('[data-a="tempSpec"]').addEventListener("click", function () {
+      var nom = num(box.querySelector('[data-f="nominal"]').value);
+      var lo = num(box.querySelector('[data-f="lsl"]').value);
+      var hi = num(box.querySelector('[data-f="usl"]').value);
+      if (lo !== null && hi !== null && lo > hi) { toast("하한값이 상한값보다 큽니다"); return; }
+      var val = (nom === null && lo === null && hi === null) ? "" : [fmt(nom), fmt(lo), fmt(hi)].join("|");
+      db.settings["tempSpec:" + eqId] = val;
+      save();
+      renderAll();
+      afterWrite(syncOn() ? sync.setSetting("tempSpec:" + eqId, val) : null);
+      toast("온도 스펙이 저장되었습니다");
+    });
+    body.appendChild(box);
+  }
+
   function renderSpec() {
     var body = $("specBody");
     var samples = cur().samples;
@@ -2247,6 +2306,7 @@
 
     if (!samples.length) {
       body.innerHTML = '<div class="empty" style="margin-bottom:10px;">등록된 마스터 샘플이 없습니다.</div>';
+      renderTempSpecCard(body);
       return;
     }
 
@@ -2362,6 +2422,7 @@
 
       body.appendChild(row);
     });
+    renderTempSpecCard(body);
   }
 
   /* =========================================================================
