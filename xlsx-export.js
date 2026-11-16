@@ -6,11 +6,15 @@
   동작해야 하고, 그래프까지 만들어 주는 가벼운 라이브러리가 없어서다.
 
   파일 구성
-    시트 「그래프」 : 샘플마다 꺾은선 차트 1개 + 설비주변온도 차트 1개 (상·하한선·지정값선 포함)
+    시트 「그래프」 : 화면과 똑같은 그래프 그림(PNG) — 어떤 프로그램에서도 보인다
+    시트 「차트」   : 같은 내용의 엑셀 차트(편집 가능, 상·하한선·지정값선 포함)
     시트 「기록」   : 차트가 읽는 표 — 한 행 = 한 번의 점검(일자·교대)
     시트 「상세」   : CSV와 같은 세로형 표(샘플마다 한 줄)
 
-  차트는 「기록」 시트의 셀을 가리키므로, 엑셀에서 값을 고치면 그래프도 같이 바뀐다.
+  「그래프」 시트를 그림으로 둔 이유: 직접 만든 엑셀 차트는 프로그램(Excel·한셀·WPS 등)에 따라
+  보이지 않는 경우가 있어(2026-11-16 현장에서 "그래프가 안 보인다" 신고), 어디서나 보이는
+  그림을 맨 앞에 두고 차트는 편집용으로 뒤에 둔다. 차트는 「기록」 시트의 셀을 가리키므로,
+  엑셀에서 값을 고치면 차트도 같이 바뀐다(그림은 바뀌지 않는다).
   글자 칸은 전부 "문자열"로 저장돼 CSV처럼 "=…" 가 수식으로 실행되는 일이 없다.
 
   사용: window.dnkXlsx.build(model) → Blob
@@ -18,7 +22,8 @@
     title, unit,
     samples: [{ id, name, type, nominal, lsl, usl }],
     temp: { nominal, lsl, usl },               // 온도 스펙(없으면 값 null)
-    recs: [{ date, shift, temp, by, note, items: [{ sid, v, judge }] }]
+    recs: [{ date, shift, temp, by, note, items: [{ sid, v, judge }] }],
+    images: [{ png: Uint8Array, w, h }]         // 화면 그래프 그림(선택)
   }
 */
 (function () {
@@ -42,11 +47,11 @@
   function u16(v) { return [v & 255, (v >>> 8) & 255]; }
   function u32(v) { return [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255]; }
 
-  function zip(files) {                       // files: [{ name, data: string }]
+  function zip(files) {                       // files: [{ name, data: string | Uint8Array }]
     var enc = new TextEncoder();
     var chunks = [], central = [], offset = 0;
     files.forEach(function (f) {
-      var name = enc.encode(f.name), data = enc.encode(f.data), crc = crc32(data);
+      var name = enc.encode(f.name), data = typeof f.data === "string" ? enc.encode(f.data) : f.data, crc = crc32(data);
       var head = [0x50, 0x4B, 3, 4].concat(u16(20), u16(0x0800), u16(0), u16(0), u16(0x21),
         u32(crc), u32(data.length), u32(data.length), u16(name.length), u16(0));
       chunks.push(new Uint8Array(head), name, data);
@@ -272,44 +277,79 @@
     }
 
     var ROWS_PER = 21;
-    var drawing = HEAD + '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" ' +
+    var images = m.images || [];
+    var hasImg = images.length > 0;
+    // 시트 번호: 그림이 있으면 1=그래프(그림) 2=차트 3=기록 4=상세, 없으면 1=그래프(차트) 2=기록 3=상세
+    var nChart = hasImg ? 2 : 1, nData = nChart + 1, nDetail = nChart + 2;
+
+    var drawingC = HEAD + '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" ' +
       'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="' + NS_R + '">' +
       charts.map(function (c, i) { return anchorXml(i + 1, 2 + i * ROWS_PER, 2 + i * ROWS_PER + ROWS_PER - 1, "rId" + (i + 1)); }).join("") + "</xdr:wsDr>";
-    var drawingRels = HEAD + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    var drawingCRels = HEAD + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
       charts.map(function (c, i) {
         return '<Relationship Id="rId' + (i + 1) + '" Type="' + NS_R + '/chart" Target="../charts/chart' + (i + 1) + '.xml"/>';
       }).join("") + "</Relationships>";
+    var titleRow = function (label) {
+      return ['<row r="1" ht="24" customHeight="1">' + cellStr(1, 0, label + " · 내보낸 날 " + (m.exportedAt || ""), 3) + "</row>"];
+    };
+    var W12 = [14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14];
+    var chartSheet = sheetXml(titleRow((m.title || "마스터 샘플 누설값") + (hasImg ? " — 엑셀 차트(편집용)" : " — 그래프")), W12, '<drawing r:id="rId1"/>');
 
-    var graphSheet = sheetXml(
-      ['<row r="1" ht="24" customHeight="1">' + cellStr(1, 0, (m.title || "마스터 샘플 누설값 그래프") + " · 내보낸 날 " + (m.exportedAt || ""), 3) + "</row>"],
-      [14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14],
-      '<drawing r:id="rId1"/>');
+    var imgFiles = [], drawingI = "", drawingIRels = "", imgSheet = "";
+    if (hasImg) {
+      var PX = 9525, SHOW_W = 640;
+      var anchors = images.map(function (im, i) {
+        var cx = SHOW_W * PX, cy = Math.round(SHOW_W * im.h / im.w) * PX;
+        var rowTop = 2 + i * 22;
+        imgFiles.push({ name: "xl/media/image" + (i + 1) + ".png", data: im.png });
+        return '<xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>' + rowTop + '</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>' +
+          '<xdr:ext cx="' + cx + '" cy="' + cy + '"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="' + (i + 2) + '" name="그래프 그림 ' + (i + 1) + '"/>' +
+          '<xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr>' +
+          '<xdr:blipFill><a:blip r:embed="rId' + (i + 1) + '"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>' +
+          '<xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' + cx + '" cy="' + cy + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>';
+      });
+      drawingI = HEAD + '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" ' +
+        'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="' + NS_R + '">' + anchors.join("") + "</xdr:wsDr>";
+      drawingIRels = HEAD + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        images.map(function (im, i) { return '<Relationship Id="rId' + (i + 1) + '" Type="' + NS_R + '/image" Target="../media/image' + (i + 1) + '.png"/>'; }).join("") + "</Relationships>";
+      imgSheet = sheetXml(titleRow((m.title || "마스터 샘플 누설값") + " — 그래프"), W12, '<drawing r:id="rId1"/>');
+    }
 
+    var sheetNames = hasImg ? [GRAPH, "차트", DATA, DETAIL] : [GRAPH, DATA, DETAIL];
+    var ctypes = HEAD + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>' +
+      (hasImg ? '<Default Extension="png" ContentType="image/png"/>' : "") +
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+      sheetNames.map(function (n, i) { return '<Override PartName="/xl/worksheets/sheet' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'; }).join("") +
+      '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>' +
+      (hasImg ? '<Override PartName="/xl/drawings/drawing2.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>' : "") +
+      charts.map(function (c, i) { return '<Override PartName="/xl/charts/chart' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>'; }).join("") +
+      "</Types>";
+    var REL = '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">';
     var files = [
-      { name: "[Content_Types].xml", data: HEAD + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
-        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>' +
-        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
-        '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
-        [1, 2, 3].map(function (n) { return '<Override PartName="/xl/worksheets/sheet' + n + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'; }).join("") +
-        '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>' +
-        charts.map(function (c, i) { return '<Override PartName="/xl/charts/chart' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>'; }).join("") +
-        "</Types>" },
-      { name: "_rels/.rels", data: HEAD + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-        '<Relationship Id="rId1" Type="' + NS_R + '/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
+      { name: "[Content_Types].xml", data: ctypes },
+      { name: "_rels/.rels", data: HEAD + REL + '<Relationship Id="rId1" Type="' + NS_R + '/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
       { name: "xl/workbook.xml", data: HEAD + '<workbook xmlns="' + NS_MAIN + '" xmlns:r="' + NS_R + '"><bookViews><workbookView activeTab="0"/></bookViews><sheets>' +
-        '<sheet name="' + GRAPH + '" sheetId="1" r:id="rId1"/><sheet name="' + DATA + '" sheetId="2" r:id="rId2"/><sheet name="' + DETAIL + '" sheetId="3" r:id="rId3"/></sheets></workbook>' },
-      { name: "xl/_rels/workbook.xml.rels", data: HEAD + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-        [1, 2, 3].map(function (n) { return '<Relationship Id="rId' + n + '" Type="' + NS_R + '/worksheet" Target="worksheets/sheet' + n + '.xml"/>'; }).join("") +
-        '<Relationship Id="rId4" Type="' + NS_R + '/styles" Target="styles.xml"/></Relationships>' },
-      { name: "xl/styles.xml", data: STYLES },
-      { name: "xl/worksheets/sheet1.xml", data: graphSheet },
-      { name: "xl/worksheets/_rels/sheet1.xml.rels", data: HEAD + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-        '<Relationship Id="rId1" Type="' + NS_R + '/drawing" Target="../drawings/drawing1.xml"/></Relationships>' },
-      { name: "xl/worksheets/sheet2.xml", data: sheetXml(rows, dataWidths) },
-      { name: "xl/worksheets/sheet3.xml", data: sheetXml(dRows, [9, 26, 12, 8, 16, 7, 11, 9, 9, 14, 7, 14, 10, 30]) },
-      { name: "xl/drawings/drawing1.xml", data: drawing },
-      { name: "xl/drawings/_rels/drawing1.xml.rels", data: drawingRels }
+        sheetNames.map(function (n, i) { return '<sheet name="' + n + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>'; }).join("") + "</sheets></workbook>" },
+      { name: "xl/_rels/workbook.xml.rels", data: HEAD + REL +
+        sheetNames.map(function (n, i) { return '<Relationship Id="rId' + (i + 1) + '" Type="' + NS_R + '/worksheet" Target="worksheets/sheet' + (i + 1) + '.xml"/>'; }).join("") +
+        '<Relationship Id="rId' + (sheetNames.length + 1) + '" Type="' + NS_R + '/styles" Target="styles.xml"/></Relationships>' },
+      { name: "xl/styles.xml", data: STYLES }
     ];
+    if (hasImg) {
+      files.push({ name: "xl/worksheets/sheet1.xml", data: imgSheet });
+      files.push({ name: "xl/worksheets/_rels/sheet1.xml.rels", data: HEAD + REL + '<Relationship Id="rId1" Type="' + NS_R + '/drawing" Target="../drawings/drawing2.xml"/></Relationships>' });
+      files.push({ name: "xl/drawings/drawing2.xml", data: drawingI });
+      files.push({ name: "xl/drawings/_rels/drawing2.xml.rels", data: drawingIRels });
+      imgFiles.forEach(function (x) { files.push(x); });
+    }
+    files.push({ name: "xl/worksheets/sheet" + nChart + ".xml", data: chartSheet });
+    files.push({ name: "xl/worksheets/_rels/sheet" + nChart + ".xml.rels", data: HEAD + REL + '<Relationship Id="rId1" Type="' + NS_R + '/drawing" Target="../drawings/drawing1.xml"/></Relationships>' });
+    files.push({ name: "xl/worksheets/sheet" + nData + ".xml", data: sheetXml(rows, dataWidths) });
+    files.push({ name: "xl/worksheets/sheet" + nDetail + ".xml", data: sheetXml(dRows, [9, 26, 12, 8, 16, 7, 11, 9, 9, 14, 7, 14, 10, 30]) });
+    files.push({ name: "xl/drawings/drawing1.xml", data: drawingC });
+    files.push({ name: "xl/drawings/_rels/drawing1.xml.rels", data: drawingCRels });
     charts.forEach(function (c, i) { files.push({ name: "xl/charts/chart" + (i + 1) + ".xml", data: c.xml }); });
     return zip(files);
   }
