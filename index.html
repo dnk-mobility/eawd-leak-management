@@ -649,6 +649,8 @@
         <p class="hint" style="margin:0 0 10px;">마스터 샘플의 <b>고유 지정값</b>과 <b>스펙(하한·상한)</b>을 여기서 한 번 등록해 두면, 매일 입력할 때는 누설값만 적으면 됩니다. 값을 고쳐도 이미 저장된 기록의 판정은 그때 기준 그대로 남습니다.</p>
         <div id="specBody"></div>
         <button class="btn sub" id="addSampleBtn" type="button">+ 마스터 샘플 추가</button>
+        <button class="btn sub" id="rejudgeBtn" type="button" style="margin-top:8px;">현재 스펙으로 과거 기록 재판정</button>
+        <p class="hint" style="margin:6px 0 0;">잘못된 스펙으로 저장된 과거 기록(그래프의 빨간 점)을 위 <b>현재 스펙</b> 기준으로 다시 판정합니다. 폐기된 샘플의 기록은 바꾸지 않습니다.</p>
       </div>
     </div>
   </details>
@@ -980,6 +982,7 @@
           label: parseInt(r.date.slice(5, 7), 10) + "/" + parseInt(r.date.slice(8, 10), 10) +
                  (r.shift === "야간" ? "야" : ""),
           v: it.v, judge: it.judge, date: r.date, shift: r.shift, by: r.by || "",
+          spec: { lsl: it.lsl === undefined ? null : it.lsl, usl: it.usl === undefined ? null : it.usl, nominal: it.nominal === undefined ? null : it.nominal },
           temp: r.temp === null || r.temp === undefined ? null : r.temp
         });
       });
@@ -1317,9 +1320,17 @@
 
     var vals = points.map(function (p) { return p.v; });
     var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
-    if (s.lsl !== null) { lo = Math.min(lo, s.lsl); hi = Math.max(hi, s.lsl); }
-    if (s.usl !== null) { lo = Math.min(lo, s.usl); hi = Math.max(hi, s.usl); }
-    if (s.nominal !== null) { lo = Math.min(lo, s.nominal); hi = Math.max(hi, s.nominal); }
+    // 기록마다 저장된 스펙이 있으면(= 점이 spec를 달고 있으면) 스펙선을 그 기록 당시 값대로
+    // 계단선으로 그린다. 빨간 점(NG)은 "그 기록을 저장한 시점의 스펙"으로 판정된 것이라,
+    // 현재 스펙선만 그리면 선 안에 있는데 빨간 점으로 보이는 어긋남이 생긴다 (2026-11-19).
+    var perPoint = points.length > 0 && points.every(function (p) { return !!p.spec; });
+    function specAt(i, k) { return perPoint ? points[i].spec[k] : s[k]; }
+    ["lsl", "usl", "nominal"].forEach(function (k) {
+      for (var qi = 0; qi < points.length; qi++) {
+        var sv = specAt(qi, k);
+        if (sv !== null && sv !== undefined) { lo = Math.min(lo, sv); hi = Math.max(hi, sv); }
+      }
+    });
 
     var span = hi - lo;
     if (span === 0) { span = Math.max(Math.abs(hi) * 0.2, 1); }
@@ -1339,11 +1350,21 @@
     if (titleLine1) svg.push('<text x="' + PL + '" y="9" font-size="8.5" font-weight="700" fill="#1b4a49">' + esc(titleLine1) + '</text>');
     if (titleLine2) svg.push('<text x="' + PL + '" y="19" font-size="7.5" fill="#5c5449">' + esc(titleLine2) + '</text>');
 
-    // 스펙 범위(합격 구간) 음영
-    if (s.lsl !== null || s.usl !== null) {
-      var yTop = s.usl !== null ? Y(s.usl) : PT;
-      var yBot = s.lsl !== null ? Y(s.lsl) : (H - PB);
-      svg.push('<rect x="' + PL + '" y="' + yTop.toFixed(1) + '" width="' + (W - PL - PR) +
+    // 점 i가 차지하는 가로 구간 [왼쪽, 오른쪽] — 이웃 점과의 중간까지. 첫·마지막은 축 끝까지.
+    function segX(i) {
+      var a = i === 0 ? PL : (X(i - 1) + X(i)) / 2;
+      var b = i === points.length - 1 ? W - PR : (X(i) + X(i + 1)) / 2;
+      return [a, b];
+    }
+
+    // 스펙 범위(합격 구간) 음영 — 기록별 구간마다 그 당시 스펙으로
+    for (var si = 0; si < points.length; si++) {
+      var sl = specAt(si, "lsl"), su = specAt(si, "usl");
+      if ((sl === null || sl === undefined) && (su === null || su === undefined)) continue;
+      var sx = segX(si);
+      var yTop = (su !== null && su !== undefined) ? Y(su) : PT;
+      var yBot = (sl !== null && sl !== undefined) ? Y(sl) : (H - PB);
+      svg.push('<rect x="' + sx[0].toFixed(1) + '" y="' + yTop.toFixed(1) + '" width="' + (sx[1] - sx[0]).toFixed(1) +
         '" height="' + Math.max(0, yBot - yTop).toFixed(1) + '" fill="#e3eedc"/>');
     }
 
@@ -1402,9 +1423,24 @@
       svg.push('<text x="' + (atLeft ? PL + 3 : W - PR) + '" y="' + (yy - 3).toFixed(1) +
         '" font-size="7.5" fill="' + color + '" text-anchor="' + (atLeft ? "start" : "end") + '">' + label + '</text>');
     }
-    if (s.usl !== null) refLine(s.usl, "#b8453a", "4 3", "상한 " + fmt(s.usl), false);
-    if (s.lsl !== null) refLine(s.lsl, "#b8453a", "4 3", "하한 " + fmt(s.lsl), false);
-    if (s.nominal !== null) refLine(s.nominal, "#8a8071", "2 2", "지정 " + fmt(s.nominal), true);
+    // 기록별 계단선: 값이 같은 구간은 이어서 한 줄로, 값이 바뀌면 그 자리에서 꺾는다.
+    function stepLine(k, color, dash, labelPrefix, atLeft) {
+      var d = "", prevY = null, lastV = null;
+      for (var i = 0; i < points.length; i++) {
+        var v = specAt(i, k);
+        if (v === null || v === undefined) { prevY = null; continue; }
+        var yy = Y(v), sx2 = segX(i);
+        d += (prevY === null ? "M" : "L") + sx2[0].toFixed(1) + "," + yy.toFixed(1) + " L" + sx2[1].toFixed(1) + "," + yy.toFixed(1) + " ";
+        prevY = yy; lastV = v;
+      }
+      if (!d) return;
+      svg.push('<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="1.2" stroke-dasharray="' + dash + '"/>');
+      svg.push('<text x="' + (atLeft ? PL + 3 : W - PR) + '" y="' + (Y(lastV) - 3).toFixed(1) +
+        '" font-size="7.5" fill="' + color + '" text-anchor="' + (atLeft ? "start" : "end") + '">' + labelPrefix + fmt(lastV) + '</text>');
+    }
+    stepLine("usl", "#b8453a", "4 3", "상한 ", false);
+    stepLine("lsl", "#b8453a", "4 3", "하한 ", false);
+    stepLine("nominal", "#8a8071", "2 2", "지정 ", true);
 
     // 폐기(교체) 시점 세로선 (2026-09-22 추가) — "폐기하고 새 마스터로 등록하면
     // 교체 시점을 그래프에 표시할 수 있냐"는 질문에 대한 답. X(i)는 실제 날짜
@@ -1496,6 +1532,12 @@
         (isNg ? ' class="pt-ng"' : '') + '/>');
     });
 
+    if (perPoint) {                                 // 기록 당시 스펙이 현재 스펙과 다르면 안내
+      var differs = points.some(function (p) {
+        return p.spec.lsl !== s.lsl || p.spec.usl !== s.usl || p.spec.nominal !== s.nominal;
+      });
+      if (differs) svg.push('<text x="' + (W - PR) + '" y="' + (H - 4) + '" font-size="7" fill="#a8752f" text-anchor="end">스펙선 = 기록 당시 값</text>');
+    }
     var xCaption = opts.xCaption || ("일자 (" + periodLabel() + ")");
     svg.push('<text x="' + PL + '" y="' + (H - 4) + '" font-size="7.5" fill="#b3a896">' + esc(xCaption) + '</text>');
     svg.push('<text x="' + (PL - 5) + '" y="' + (PT - 5) + '" font-size="7.5" fill="#b3a896" text-anchor="end">' + esc(unit) + '</text>');
@@ -2082,7 +2124,8 @@
             label: parseInt(r.date.slice(8, 10), 10) +
               (period === "week" ? "(" + weekdayKo(r.date) + ")" : "") +
               (r.shift === "야간" ? "야" : ""),
-            v: it.v, judge: it.judge, date: r.date, shift: r.shift
+            v: it.v, judge: it.judge, date: r.date, shift: r.shift,
+            spec: { lsl: it.lsl === undefined ? null : it.lsl, usl: it.usl === undefined ? null : it.usl, nominal: it.nominal === undefined ? null : it.nominal }
           });
         });
       });
@@ -2634,6 +2677,50 @@
     attachChartTouch(body.querySelector(".chart-card"), chart, pts);
   }
 
+  // 관리자 전용 — 이 설비의 과거 기록 판정을 지금 등록된 스펙으로 다시 매긴다.
+  // 평소에는 "저장 당시 스펙 그대로"가 원칙이지만, 폰에 옛 스펙이 남아 있었던 등 잘못된 스펙으로
+  // 저장된 기록을 바로잡을 때 쓴다. 바뀐 기록만 구글시트로 다시 보낸다.
+  function rejudgeHistory() {
+    if (!calibUnlocked()) { toast("관리자 모드에서만 사용할 수 있습니다"); return; }
+    var e = cur(), byId = {};
+    e.samples.forEach(function (s) { byId[s.id] = s; });
+    var recsChanged = [], itemsChanged = 0, flips = 0;
+    e.recs.forEach(function (r) {
+      var touched = false;
+      r.items.forEach(function (it) {
+        var s = byId[it.sid];
+        if (!s || s.retired) return;
+        var j = judge(it.v, s.lsl, s.usl);
+        if (it.lsl !== s.lsl || it.usl !== s.usl || it.nominal !== s.nominal || it.judge !== j) {
+          touched = true; itemsChanged++;
+          if (it.judge !== j) flips++;
+        }
+      });
+      if (touched) recsChanged.push(r);
+    });
+    if (!recsChanged.length) { toast("바꿀 기록이 없습니다 — 모두 현재 스펙 기준입니다"); return; }
+    var msg = "[" + EQ[eqId].title + "]\n기록 " + recsChanged.length + "건(판정이 바뀌는 항목 " + flips + "개)을 현재 스펙으로 다시 판정합니다.\n" +
+      "과거 기록의 스펙·판정이 바뀌며 구글시트에도 반영됩니다.\n\n계속할까요?";
+    if (!confirm(msg)) return;
+    var now = new Date().toISOString();
+    recsChanged.forEach(function (r) {
+      r.items.forEach(function (it) {
+        var s = byId[it.sid];
+        if (!s || s.retired) return;
+        it.nominal = s.nominal; it.lsl = s.lsl; it.usl = s.usl; it.judge = judge(it.v, s.lsl, s.usl);
+      });
+      r.ts = now;
+    });
+    save();
+    renderAll();
+    toast("재판정 완료 — 기록 " + recsChanged.length + "건, 판정 변경 " + flips + "개");
+    if (syncOn()) {
+      var chain = Promise.resolve();
+      recsChanged.forEach(function (r) { chain = chain.then(function () { return sync.pushRecord(eqId, r); }); });
+      afterWrite(chain);
+    }
+  }
+
   function addSample() {
     if (!calibUnlocked()) { toast("관리자 모드에서만 추가할 수 있습니다"); return; }
     var name = prompt("추가할 마스터 샘플 이름을 입력하세요\n(예: OK 마스터(하우징), NG 마스터)");
@@ -3017,7 +3104,8 @@
         recs.forEach(function (r) {
           r.items.forEach(function (it) {
             if (it.sid !== s.id || it.v === null) return;
-            pts.push({ label: lab(r), v: it.v, judge: it.judge, date: r.date, shift: r.shift });
+            pts.push({ label: lab(r), v: it.v, judge: it.judge, date: r.date, shift: r.shift,
+              spec: { lsl: it.lsl === undefined ? null : it.lsl, usl: it.usl === undefined ? null : it.usl, nominal: it.nominal === undefined ? null : it.nominal } });
           });
         });
         if (!pts.length) return;
@@ -4038,6 +4126,7 @@
     $("syncBtn").addEventListener("click", function () { syncNow("manual"); });
     $("saveBtn").addEventListener("click", doSave);
     $("addSampleBtn").addEventListener("click", addSample);
+    $("rejudgeBtn").addEventListener("click", rejudgeHistory);
     $("csvBtn").addEventListener("click", exportCsv);
     $("xlsxBtn").addEventListener("click", exportXlsx);
     $("backupBtn").addEventListener("click", exportBackup);
