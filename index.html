@@ -3300,6 +3300,7 @@
     if (!syncOn()) { refreshSyncBar(); return Promise.resolve(); }
     if (syncBusy && reason !== "manual") return Promise.resolve();   // 이미 동기화 중
 
+    sync.queueAllFrom(db);                   // 새 서버 주소를 처음 쓰는 폰이면 가진 기록을 먼저 올린다(1회)
     var eqAt = eqId, months = periodMonths(), gen = writeGen;
     syncBusy = true;
     lastPullAt = Date.now();

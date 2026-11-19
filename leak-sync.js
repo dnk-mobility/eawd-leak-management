@@ -26,7 +26,7 @@
   /* ▼▼▼ 설정 — 구글시트 연동 후 이 두 줄만 채워서 push 하면 됩니다 ▼▼▼ */
 
   // Apps Script "웹 앱" 배포 주소 (https://script.google.com/macros/s/..../exec)
-  var URL = "https://script.google.com/macros/s/AKfycbxh8E4XdHGyH4BEti6jsZJ0Z3auFlPlGLEfIcLmIux8Kt1OAEGAliTHuKw5aE0busi1/exec";
+  var URL = "https://script.google.com/macros/s/AKfycby6xYrIG3Ff4b52FKutqh7HAAXjAj69c7fe8mWKTLdJpzxWPBqVuFSirIl0ojTdhrac/exec";
 
   // tools/apps-script/Code.gs 의 TOKEN 과 반드시 같은 값
   var TOKEN = "dnk-leak-2026";
@@ -153,6 +153,48 @@
     return step();
   }
 
+
+  /* ===== 새 서버로 이사 시 1회 전체 업로드 (2026-11-19) =====
+     서버 주소가 바뀌면 새 시트는 비어 있다. 그대로 "서버가 정답"으로 내려받으면 이 폰의
+     기록이 지워지므로, 새 주소를 처음 쓰는 폰은 가진 것을 전부 미전송 대기열에 넣어 둔다.
+     대기열은 내려받기보다 먼저 비워지고(미전송이 남으면 pull 안 함), 서버 쪽 push 는
+     같은 날짜·교대면 덮어쓰기라 여러 폰이 같은 걸 올려도 중복되지 않는다. */
+  function migrationFlagKey() { return "dnk_migrated_" + getUrl().slice(-24); }
+
+  function migrateNeeded() {
+    if (!enabled()) return false;
+    try { return !localStorage.getItem(migrationFlagKey()); } catch (e) { return false; }
+  }
+
+  function queueAllFrom(db) {
+    if (!migrateNeeded()) return 0;
+    var arr = queueRead(), n = 0;
+    function add(key, params) {
+      arr = arr.filter(function (j) { return j.key !== key; });
+      arr.push({ key: key, params: params, at: new Date().toISOString() });
+      n++;
+    }
+    var settings = (db && db.settings) || {};
+    Object.keys(settings).forEach(function (k) {
+      if (settings[k] !== undefined && settings[k] !== null && settings[k] !== "")
+        add("setting:" + k, { action: "setting", data: JSON.stringify({ key: k, value: settings[k] }) });
+    });
+    Object.keys((db && db.eq) || {}).forEach(function (id) {
+      var e = db.eq[id] || {};
+      if (e.samples && e.samples.length)
+        add("samples:" + id, { action: "samples", data: JSON.stringify({ eq: id, samples: e.samples }) });
+      (e.calib || []).forEach(function (it) {
+        add("calib:" + id + ":" + it.id, { action: "calibPush", data: JSON.stringify({ eq: id, item: it }) });
+      });
+      (e.recs || []).forEach(function (r) {
+        add("rec:" + id + ":" + r.date + ":" + r.shift, { action: "push", data: JSON.stringify({ eq: id, rec: r }) });
+      });
+    });
+    queueWrite(arr);
+    try { localStorage.setItem(migrationFlagKey(), new Date().toISOString()); } catch (e) {}
+    return n;
+  }
+
   /* ===== 공개 동작 ===== */
 
   function ping() {
@@ -225,6 +267,7 @@
     deleteCalib: deleteCalib,
     setSetting: setSetting,
     wipe: wipe,
+    queueAllFrom: queueAllFrom,
     queueSize: queueSize,
     flush: flush
   };
