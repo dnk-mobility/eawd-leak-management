@@ -706,7 +706,9 @@
       <button class="btn sub" id="chartImgBtn" type="button" style="margin-top:8px;">이번 달 그래프 이미지 저장 (PNG)</button>
       <button class="btn sub" id="restoreBtn" type="button" style="margin-top:8px;">백업 파일 불러오기</button>
       <input type="file" id="restoreFile" accept=".json,application/json" style="display:none;">
-      <button class="btn danger" id="wipeBtn" type="button" style="margin-top:14px;">이 설비 기록 전체 삭제</button>
+      <!-- 관리자 모드(④·⑤와 같은 암호)에서만 보인다 (2026-11-19) -->
+      <button class="btn danger" id="wipeBtn" type="button" style="margin-top:14px;" hidden>이 설비 기록 전체 삭제</button>
+      <p class="hint" id="wipeLockHint" style="margin-top:14px;">기록 전체 삭제는 <b>관리자 모드</b>에서만 할 수 있습니다. (④ 마스터 샘플 · 스펙 관리에서 관리자 모드로 전환)</p>
       <p class="hint" id="dataStat"></p>
     </div>
   </details>
@@ -2850,6 +2852,9 @@
 
   // 이력 표는 누구나 볼 수 있고, 입력 폼·삭제 버튼만 관리자 암호로 잠근다.
   function renderCalibGate() {
+    var adm = calibUnlocked();                 // 위험한 「기록 전체 삭제」는 관리자 모드에서만 노출
+    $("wipeBtn").hidden = !adm;
+    $("wipeLockHint").hidden = adm;
     var hidden = calibHidden();
     $("calibTitle").textContent = hidden ? "기타사항" : "디텍터 보정 이력";
     $("calibHiddenView").hidden = !hidden;
@@ -3257,6 +3262,7 @@
   }
 
   function wipeEq() {
+    if (!calibUnlocked()) { toast("관리자 모드에서만 삭제할 수 있습니다"); return; }   // 숨김 우회 호출 방지
     var n = cur().recs.length;
     if (!n) { toast("삭제할 기록이 없습니다"); return; }
     if (!confirm("공정No." + eqId + " 의 기록 " + n + "건을 모두 삭제할까요?\n되돌릴 수 없습니다. 먼저 백업을 받으시는 것을 권장합니다.")) return;
