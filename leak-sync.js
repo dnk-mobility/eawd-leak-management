@@ -166,33 +166,80 @@
     try { return !localStorage.getItem(migrationFlagKey()); } catch (e) { return false; }
   }
 
+  function fillKey() { return "dnk_migfill_" + getUrl().slice(-24); }
+
+  // 기본값 그대로가 아닌(스펙·QR·폐기 등을 손본) 샘플이 있는가 — 기본 샘플은 올릴 가치가 없고
+  // 올리면 오히려 서버의 진짜 스펙을 덮어쓴다.
+  function hasCustomSpec(samples) {
+    return (samples || []).some(function (s) {
+      return s.nominal != null || s.lsl != null || s.usl != null || !!s.qrNo || !!s.retired;
+    });
+  }
+
+  // 첫 내려받기에서 호출: 이 설비의 샘플·앱 설정을 "서버가 비어 있으면 올려도 되는가"
+  function fillTake(eq) {
+    var res = { samples: false, settings: false };
+    try {
+      var raw = localStorage.getItem(fillKey());
+      if (!raw) return res;
+      var m = JSON.parse(raw), i = (m.eqs || []).indexOf(eq);
+      if (i >= 0) { res.samples = true; m.eqs.splice(i, 1); }
+      if (m.settings) { res.settings = true; m.settings = false; }
+      if (m.eqs.length || m.settings) localStorage.setItem(fillKey(), JSON.stringify(m));
+      else localStorage.removeItem(fillKey());
+    } catch (e) {}
+    return res;
+  }
+
+  // 새 서버 주소를 처음 쓰는 폰이 가진 기록을 올릴 준비를 한다. 설비마다 서버 전체를 먼저 읽어서
+  //  - 서버에 없는 기록, 이 폰 쪽이 더 새로운(ts) 기록, 서버에 없는 보정 이력만 대기열에 넣는다
+  //    (여러 폰이 같은 걸 또 올리지 않고, 오래된 폰이 최신 값을 덮어쓰지도 않게).
+  // 하나라도 읽기에 실패하면 거부(reject)한다 — 이 경우 호출 쪽은 이번 동기화를 건너뛰어야 한다
+  // (서버를 못 읽은 채 내려받기까지 가면 이 폰 기록이 서버 기준으로 교체될 수 있으므로).
+  var migrating = null;
   function queueAllFrom(db) {
-    if (!migrateNeeded()) return 0;
-    var arr = queueRead(), n = 0;
+    if (!migrateNeeded()) return Promise.resolve(0);
+    if (migrating) return migrating;
+    var ids = Object.keys((db && db.eq) || {}), arr = [], n = 0, fillEqs = [];
+    var hasSettings = false, st = (db && db.settings) || {};
+    Object.keys(st).forEach(function (k) { if (st[k]) hasSettings = true; });
     function add(key, params) {
-      arr = arr.filter(function (j) { return j.key !== key; });
       arr.push({ key: key, params: params, at: new Date().toISOString() });
       n++;
     }
-    var settings = (db && db.settings) || {};
-    Object.keys(settings).forEach(function (k) {
-      if (settings[k] !== undefined && settings[k] !== null && settings[k] !== "")
-        add("setting:" + k, { action: "setting", data: JSON.stringify({ key: k, value: settings[k] }) });
-    });
-    Object.keys((db && db.eq) || {}).forEach(function (id) {
-      var e = db.eq[id] || {};
-      if (e.samples && e.samples.length)
-        add("samples:" + id, { action: "samples", data: JSON.stringify({ eq: id, samples: e.samples }) });
-      (e.calib || []).forEach(function (it) {
-        add("calib:" + id + ":" + it.id, { action: "calibPush", data: JSON.stringify({ eq: id, item: it }) });
+    function one(i) {
+      if (i >= ids.length) return Promise.resolve();
+      var id = ids[i], e = db.eq[id] || {};
+      if (!(e.recs && e.recs.length) && !(e.calib && e.calib.length) && !hasCustomSpec(e.samples)) return one(i + 1);
+      return pull(id, "").then(function (srv) {
+        var byKey = {};
+        (srv.recs || []).forEach(function (r) { byKey[r.date + "|" + r.shift] = r; });
+        var calKeys = {};
+        (srv.calib || []).forEach(function (c) { calKeys[c.id] = true; });
+        if (hasCustomSpec(e.samples)) fillEqs.push(id);
+        (e.calib || []).forEach(function (it) {
+          if (!calKeys[it.id])
+            add("calib:" + id + ":" + it.id, { action: "calibPush", data: JSON.stringify({ eq: id, item: it }) });
+        });
+        (e.recs || []).forEach(function (r) {
+          var o = byKey[r.date + "|" + r.shift];
+          if (!o || String(r.ts || "") > String(o.ts || ""))
+            add("rec:" + id + ":" + r.date + ":" + r.shift, { action: "push", data: JSON.stringify({ eq: id, rec: r }) });
+        });
+        return one(i + 1);
       });
-      (e.recs || []).forEach(function (r) {
-        add("rec:" + id + ":" + r.date + ":" + r.shift, { action: "push", data: JSON.stringify({ eq: id, rec: r }) });
-      });
-    });
-    queueWrite(arr);
-    try { localStorage.setItem(migrationFlagKey(), new Date().toISOString()); } catch (e) {}
-    return n;
+    }
+    migrating = one(0).then(function () {
+      var q = queueRead().filter(function (j) {
+        return !arr.some(function (a) { return a.key === j.key; });   // 같은 대상의 이전 대기 건은 새 것으로 교체
+      }).concat(arr);
+      queueWrite(q);
+      try { localStorage.setItem(fillKey(), JSON.stringify({ eqs: fillEqs, settings: hasSettings })); } catch (e) {}
+      try { localStorage.setItem(migrationFlagKey(), new Date().toISOString()); } catch (e) {}
+      migrating = null;
+      return n;
+    }, function (err) { migrating = null; throw err; });
+    return migrating;
   }
 
   /* ===== 공개 동작 ===== */
@@ -268,6 +315,7 @@
     setSetting: setSetting,
     wipe: wipe,
     queueAllFrom: queueAllFrom,
+    fillTake: fillTake,
     queueSize: queueSize,
     flush: flush
   };

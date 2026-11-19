@@ -3272,7 +3272,11 @@
     // "지금 ym과 정확히 같은가"가 아니라 "지금 화면에 필요한 달들 중 하나인가"로 본다.
     if (eqAt !== eqId || periodMonths().indexOf(ymAt) < 0) return false;   // 그 사이 화면이 바뀌었으면 버림
     var e = db.eq[eqAt];
+    var fill = sync.fillTake(eqAt);   // 새 서버로 이사한 직후 1회: 서버가 비어 있으면 이 폰 값을 올린다
 
+    if (!(data.samples && data.samples.length) && fill.samples && e.samples.length) {
+      sync.pushSamples(eqAt, e.samples);                       // 서버에 샘플이 없을 때만 — 있으면 서버 것이 정답
+    }
     if (data.samples && data.samples.length) {
       e.samples = data.samples.map(function (s) {
         return { id: s.id, name: s.name, qrNo: s.qrNo || "", type: s.type === "NG" ? "NG" : "OK",
@@ -3287,7 +3291,16 @@
     // 보정 이력은 드문 이벤트라 pull()이 항상 전체를 돌려준다 — 통째로 교체해도 안전
     if (data.calib) e.calib = data.calib;
     // 앱 전체 설정(잠금 상태 등)은 서버 값을 정답으로 본다 — 모든 폰이 같은 상태를 보게
-    if (data.settings) db.settings = data.settings;
+    if (data.settings) {
+      var keep = {};
+      if (fill.settings) {                                     // 서버에 없는 설정만 이 폰 값을 살린다
+        Object.keys(db.settings).forEach(function (k) {
+          if (db.settings[k] && !(k in data.settings)) keep[k] = db.settings[k];
+        });
+      }
+      db.settings = data.settings;
+      Object.keys(keep).forEach(function (k) { db.settings[k] = keep[k]; sync.setSetting(k, keep[k]); });
+    }
 
     save();
     return true;
@@ -3300,13 +3313,13 @@
     if (!syncOn()) { refreshSyncBar(); return Promise.resolve(); }
     if (syncBusy && reason !== "manual") return Promise.resolve();   // 이미 동기화 중
 
-    sync.queueAllFrom(db);                   // 새 서버 주소를 처음 쓰는 폰이면 가진 기록을 먼저 올린다(1회)
     var eqAt = eqId, months = periodMonths(), gen = writeGen;
     syncBusy = true;
     lastPullAt = Date.now();
     if (reason !== "tick") setSync("busy", reason === "manual" ? "동기화 중…" : "불러오는 중…");
 
-    return sync.flush().then(function (res) {
+    // 새 서버 주소를 처음 쓰는 폰이면 가진 기록을 먼저 올릴 준비를 한다(1회). 서버를 못 읽으면 내려받기도 하지 않는다.
+    return sync.queueAllFrom(db).then(function () { return sync.flush(); }).then(function (res) {
       if (res && res.left) {
         setSync("err", "미전송 " + res.left + "건 · 자동 재전송 중");
         return null;                                   // 미전송이 남으면 내려받지 않는다
