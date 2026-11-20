@@ -320,6 +320,28 @@
     .modal{align-items:center;}
     .modal-in{border-radius:12px;}
   }
+  .modal-head .print-btn{width:auto;padding:0 10px;font-size:12px;font-weight:700;}
+  .print-only{display:none;}
+
+  /* 전체 이력 인쇄 / PDF 저장 — 전체 이력 창만 종이에 나오게 한다 */
+  @media print{
+    body > :not(.modal){display:none !important;}
+    .modal{position:static;display:block;background:none;}
+    .modal-in{max-width:none;max-height:none;width:auto;overflow:visible;border-radius:0;background:#fff;display:block;}
+    .modal-head{background:none;color:#000;padding:0 0 6px;border-bottom:2px solid #000;}
+    .modal-head .t{white-space:normal;font-size:16px;}
+    .modal-head button{display:none !important;}
+    .modal-body{overflow:visible;padding:8px 0 0;}
+    .table-scroll{max-height:none !important;overflow:visible !important;}
+    .print-only{display:block;font-size:11px;color:#333;margin:0 0 8px;}
+    .no-print{display:none !important;}
+    .stat-grid{grid-template-columns:repeat(6,1fr);}
+    .stat.wide{grid-column:1/-1;}
+    .stat-grid,.trend-note,.chart-card svg{break-inside:avoid;}
+    table.hist tr{break-inside:avoid;}
+    table.hist thead{display:table-header-group;}
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  }
 
   /* 추이 이상 신호(SPC 규칙 기반 자동 탐지) */
   .trend-note{
@@ -2582,7 +2604,8 @@
     m.innerHTML =
       '<div class="modal-in">' +
         '<div class="modal-head"><span class="t">전체 이력</span>' +
-          '<button type="button" aria-label="닫기">✕</button></div>' +
+          '<button type="button" class="print-btn" data-print title="인쇄하거나 PDF로 저장">🖨 인쇄/PDF</button>' +
+          '<button type="button" data-close aria-label="닫기">✕</button></div>' +
         '<div class="modal-body"></div>' +
       '</div>';
 
@@ -2592,7 +2615,11 @@
     }
     function onKey(e) { if (e.key === "Escape") close(); }
 
-    m.querySelector(".modal-head button").addEventListener("click", close);
+    m.querySelector("[data-close]").addEventListener("click", close);
+    m.querySelector("[data-print]").addEventListener("click", function () {
+      if (m.querySelector(".modal-body .empty")) { toast("인쇄할 이력이 아직 없습니다"); return; }
+      window.print();
+    });
     m.addEventListener("click", function (e) { if (e.target === m) close(); });
     document.addEventListener("keydown", onKey);
 
@@ -2651,7 +2678,13 @@
         '<td class="note">' + esc(p.by) + "</td></tr>";
     }).join("");
 
+    var nowD = new Date(), pad2 = function (n) { return (n < 10 ? "0" : "") + n; };
+    var printedAt = nowD.getFullYear() + "-" + pad2(nowD.getMonth() + 1) + "-" + pad2(nowD.getDate()) + " " +
+      pad2(nowD.getHours()) + ":" + pad2(nowD.getMinutes());
+
     body.innerHTML =
+      '<div class="print-only">' + esc(EQ[eqId].title) + " · " + esc(s.name) + "(" + esc(s.type) + ") · " +
+        esc(specText(s)) + " · 출력 " + printedAt + "</div>" +
       note +
       (s.retired
         ? '<p class="hint" style="color:var(--warn-text);margin:0 0 10px;">이 샘플은 ' + esc(s.retiredAt) +
@@ -2670,11 +2703,11 @@
       '<div class="chart-card">' + chart.svg +
         regressionStatsHtml(chart.reg) +
         renderTrendNote(pts, s) +
-        '<div class="ch-legend"><span style="width:100%;">점을 터치하면 그때 값이 표시됩니다 · 숫자 뒤 &ldquo;야&rdquo; = 야간 교대</span></div>' +
+        '<div class="ch-legend no-print"><span style="width:100%;">점을 터치하면 그때 값이 표시됩니다 · 숫자 뒤 &ldquo;야&rdquo; = 야간 교대</span></div>' +
       '</div>' +
       '<div class="table-scroll" style="max-height:280px;overflow:auto;">' +
-        '<table class="hist"><tr><th>일자</th><th>교대</th><th>누설값<br>(' + UNIT + ')</th>' +
-        '<th>판정</th><th>확인자</th></tr>' + rows + '</table></div>';
+        '<table class="hist"><thead><tr><th>일자</th><th>교대</th><th>누설값<br>(' + UNIT + ')</th>' +
+        '<th>판정</th><th>확인자</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
 
     attachChartTouch(body.querySelector(".chart-card"), chart, pts);
   }
