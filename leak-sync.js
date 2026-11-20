@@ -242,6 +242,34 @@
     return migrating;
   }
 
+  // 백업 파일 불러오기 직후 — 불러온 내용 전부(샘플·기록·보정이력·설정)를 서버로 보낼 작업으로 대기열에 넣는다.
+  // 대기열은 폰에 저장되므로 보내는 도중 창을 닫아도 다음에 이어서 전송된다. 서버에만 있는 기록은 건드리지 않는다.
+  function queueRestore(db, onlyIds) {
+    if (!enabled()) return 0;
+    var arr = [], at = new Date().toISOString();
+    function add(key, params) { arr.push({ key: key, params: params, at: at }); }
+    (onlyIds || Object.keys((db && db.eq) || {})).forEach(function (id) {
+      var e = (db.eq || {})[id] || {};
+      if ((e.samples || []).length)
+        add("samples:" + id, { action: "samples", data: JSON.stringify({ eq: id, samples: e.samples }) });
+      (e.calib || []).forEach(function (it) {
+        add("calib:" + id + ":" + it.id, { action: "calibPush", data: JSON.stringify({ eq: id, item: it }) });
+      });
+      (e.recs || []).forEach(function (r) {
+        add("rec:" + id + ":" + r.date + ":" + r.shift, { action: "push", data: JSON.stringify({ eq: id, rec: r }) });
+      });
+    });
+    var st = (db && db.settings) || {};
+    Object.keys(st).forEach(function (k) {
+      add("setting:" + k, { action: "setting", data: JSON.stringify({ key: k, value: st[k] }) });
+    });
+    var q = queueRead().filter(function (j) {
+      return !arr.some(function (a) { return a.key === j.key; });
+    }).concat(arr);
+    queueWrite(q);
+    return arr.length;
+  }
+
   /* ===== 공개 동작 ===== */
 
   function ping() {
@@ -315,6 +343,7 @@
     setSetting: setSetting,
     wipe: wipe,
     queueAllFrom: queueAllFrom,
+    queueRestore: queueRestore,
     fillTake: fillTake,
     queueSize: queueSize,
     flush: flush
