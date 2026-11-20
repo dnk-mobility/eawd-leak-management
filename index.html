@@ -726,11 +726,11 @@
       <button class="btn sub" id="xlsxBtn" type="button" style="margin-top:8px;">엑셀로 저장 (그래프 포함)</button>
       <p class="hint" style="margin:4px 0 0;">OK·NG 마스터·설비주변온도 그래프(상·하한선 포함)가 그림과 엑셀 차트로 들어갑니다. 이 설비의 기록 전체가 대상입니다.</p>
       <button class="btn sub" id="chartImgBtn" type="button" style="margin-top:8px;">이번 달 그래프 이미지 저장 (PNG)</button>
-      <button class="btn sub" id="restoreBtn" type="button" style="margin-top:8px;">백업 파일 불러오기</button>
+      <button class="btn sub" id="restoreBtn" type="button" style="margin-top:8px;" hidden>백업 파일 불러오기</button>
       <input type="file" id="restoreFile" accept=".json,application/json" style="display:none;">
       <!-- 관리자 모드(④·⑤와 같은 암호)에서만 보인다 (2026-11-19) -->
       <button class="btn danger" id="wipeBtn" type="button" style="margin-top:14px;" hidden>이 설비 기록 전체 삭제</button>
-      <p class="hint" id="wipeLockHint" style="margin-top:14px;">기록 전체 삭제는 <b>관리자 모드</b>에서만 할 수 있습니다. (④ 마스터 샘플 · 스펙 관리에서 관리자 모드로 전환)</p>
+      <p class="hint" id="wipeLockHint" style="margin-top:14px;">기록 전체 삭제와 백업 파일 불러오기는 <b>관리자 모드</b>에서만 할 수 있습니다. (④ 마스터 샘플 · 스펙 관리에서 관리자 모드로 전환)</p>
       <p class="hint" id="dataStat"></p>
     </div>
   </details>
@@ -2887,6 +2887,7 @@
   function renderCalibGate() {
     var adm = calibUnlocked();                 // 위험한 「기록 전체 삭제」는 관리자 모드에서만 노출
     $("wipeBtn").hidden = !adm;
+    $("restoreBtn").hidden = !adm;
     $("wipeLockHint").hidden = adm;
     var hidden = calibHidden();
     $("calibTitle").textContent = hidden ? "기타사항" : "디텍터 보정 이력";
@@ -3273,6 +3274,7 @@
   }
 
   function importBackup(file) {
+    if (!calibUnlocked()) { toast("관리자 모드에서만 불러올 수 있습니다"); return; }   // 숨김 우회 방지
     var fr = new FileReader();
     fr.onload = function () {
       var data;
@@ -4171,7 +4173,10 @@
     $("backupBtn").addEventListener("click", exportBackup);
     $("chartImgBtn").addEventListener("click", exportChartImages);
     $("wipeBtn").addEventListener("click", wipeEq);
-    $("restoreBtn").addEventListener("click", function () { $("restoreFile").click(); });
+    $("restoreBtn").addEventListener("click", function () {
+      if (!calibUnlocked()) { toast("관리자 모드에서만 불러올 수 있습니다"); return; }
+      $("restoreFile").click();
+    });
     $("restoreFile").addEventListener("change", function (e) {
       if (e.target.files && e.target.files[0]) importBackup(e.target.files[0]);
       e.target.value = "";
